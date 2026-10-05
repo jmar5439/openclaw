@@ -1,4 +1,3 @@
-// Binding routing tests cover channel binding selection and message routing behavior.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   testing,
@@ -16,18 +15,26 @@ import {
   inspectRuntimeConversationBindingRoute,
   type RuntimeConversationBindingRouteResult,
 } from "./binding-routing.js";
-import { registerStatefulBindingTargetDriver } from "./stateful-target-drivers.js";
+const acpReadiness = vi.hoisted(() => vi.fn());
+// mock-isolation: Readiness timeout tests must not initialize ACP backend registries or Gateway reset state.
+vi.mock("./acp-stateful-target-driver.js", () => ({
+  ensureConfiguredAcpBindingTargetReady: acpReadiness,
+}));
 
 function createRoute(): ResolvedAgentRoute {
-  return {
-    agentId: "main",
-    channel: "demo",
-    accountId: "default",
-    sessionKey: "agent:main:main",
-    mainSessionKey: "agent:main:main",
-    lastRoutePolicy: "main",
-    matchedBy: "default",
+  const result: RuntimeConversationBindingRouteResult = {
+    bindingRecord: null,
+    route: {
+      agentId: "main",
+      channel: "demo",
+      accountId: "default",
+      sessionKey: "agent:main:main",
+      mainSessionKey: "agent:main:main",
+      lastRoutePolicy: "main",
+      matchedBy: "default",
+    },
   };
+  return result.route;
 }
 
 function createBinding(overrides?: Partial<SessionBindingRecord>): SessionBindingRecord {
@@ -93,6 +100,7 @@ describe("runtime conversation binding route", () => {
       groupScope: "main",
       lastRoutePolicy: target.targetSessionKey === "global" ? "session" : "main",
     });
+    expect(result.boundAgentId).toBe("review");
     expect(readConversationBindingRouteFacts(result.route)).toMatchObject({
       kind: "agent",
       agentId: "review",
@@ -132,7 +140,7 @@ describe("runtime conversation binding route", () => {
     (mainKey) => {
       const ordinaryRoute = resolveAgentRoute({
         cfg: {
-          agents: { list: [{ id: "main" }, { id: "review" }] },
+          agents: { entries: { main: {}, review: {} } },
           bindings: [{ agentId: "main", match: { channel: "demo" } }],
           session: { mainKey },
         },
@@ -196,15 +204,6 @@ describe("runtime conversation binding route", () => {
     gate.resolve();
     expect((await pending).boundSessionKey).toBe(binding.targetSessionKey);
     expect(touch).not.toHaveBeenCalled();
-  });
-
-  it("keeps the stable runtime-route result structurally assignable", () => {
-    const result: RuntimeConversationBindingRouteResult = {
-      bindingRecord: null,
-      route: createRoute(),
-    };
-
-    expect(result.bindingOwnerAvailable).toBeUndefined();
   });
 
   it.each([
@@ -306,6 +305,8 @@ describe("runtime conversation binding route", () => {
       mainSessionKey: "agent:review:main",
       lastRoutePolicy: "session",
       matchedBy: "binding.channel",
+      // Free ACP harness keys keep the pre-rewrite channel agent as dispatch owner (#146365).
+      ownerAgentId: "main",
     });
   });
 
@@ -339,25 +340,89 @@ describe("runtime conversation binding route", () => {
   });
 
   it.each([
-    { targetSessionKey: "global", metadata: { agentId: "review" }, agentId: "review" },
-    { targetSessionKey: "global", metadata: undefined, agentId: "main" },
+    { name: "agent session", binding: createBinding(), kind: "agent", agentId: "review" },
     {
-      targetSessionKey: "agent:review:session-1",
-      metadata: { agentId: "other" },
+      name: "inspection",
+      binding: createBinding(),
+      kind: "agent",
       agentId: "review",
+      touchBinding: false,
     },
-  ])("resolves $targetSessionKey to owner $agentId", ({ targetSessionKey, metadata, agentId }) => {
-    const binding = createBinding({ targetSessionKey, metadata });
-    registerAdapter(binding);
-
-    const result = resolveRuntimeConversationBindingRoute({
-      route: createRoute(),
-      conversation: binding.conversation,
-    });
-
-    expect(result.route).toMatchObject({ sessionKey: targetSessionKey, agentId });
-    expect(result.boundAgentId).toBe(agentId);
-  });
+    {
+      name: "global fallback",
+      binding: createBinding({ targetSessionKey: "global" }),
+      kind: "agent",
+      agentId: "main",
+    },
+    {
+      name: "plugin owner",
+      binding: createBinding({
+        metadata: {
+          pluginBindingOwner: "plugin",
+          pluginId: "demo-plugin",
+          pluginRoot: "/tmp/demo-plugin",
+        },
+      }),
+      kind: "plugin",
+    },
+    {
+      name: "isolated cron",
+      binding: createBinding({
+        targetSessionKey: "agent:youtube:cron:monthly-report:run:closed-run-1",
+      }),
+      kind: "none",
+    },
+  ])(
+    "projects $name and touches only its owning channel account",
+    ({ binding, kind, agentId, touchBinding }) => {
+      const route = createRoute();
+      const { resolveByConversation, touch } = registerAdapter(binding);
+      const siblingTouches = [
+        { channel: "other", accountId: "default" },
+        { channel: "demo", accountId: "other" },
+      ].map(
+        (scope) =>
+          registerAdapter(createBinding({ conversation: { ...binding.conversation, ...scope } }))
+            .touch,
+      );
+      const result = resolveRuntimeConversationBindingRoute({
+        route,
+        conversation: binding.conversation,
+        touchBinding,
+      });
+      expect(resolveByConversation).toHaveBeenCalledWith(binding.conversation);
+      if (kind !== "none" && touchBinding !== false) {
+        expect(touch).toHaveBeenCalledWith("binding-1", undefined);
+      } else {
+        expect(touch).not.toHaveBeenCalled();
+      }
+      for (const siblingTouch of siblingTouches) {
+        expect(siblingTouch).not.toHaveBeenCalled();
+      }
+      expect(result.bindingOwnerAvailable).toBe(true);
+      expect(result.bindingRecord).toBe(kind === "none" ? null : binding);
+      expect(result.boundSessionKey).toBe(kind === "agent" ? binding.targetSessionKey : undefined);
+      expect(result.boundAgentId).toBe(agentId);
+      expect(Object.fromEntries(Object.entries(result.route))).toEqual(
+        kind === "agent"
+          ? {
+              ...route,
+              agentId,
+              sessionKey: binding.targetSessionKey,
+              mainSessionKey: `agent:${agentId}:main`,
+              lastRoutePolicy: "session",
+              matchedBy: "binding.channel",
+              // Free ACP harness keys keep the pre-rewrite channel agent
+              // as dispatch owner (#146365).
+              ...(binding.targetSessionKey === "global" ? {} : { ownerAgentId: "main" }),
+            }
+          : route,
+      );
+      expect(readConversationBindingRouteFacts(route)).toBeUndefined();
+      expect(Object.isFrozen(readConversationBindingRouteFacts(result.route))).toBe(true);
+      expect(readConversationBindingRouteFacts(result.route)?.kind).toBe(kind);
+    },
+  );
 
   it("rejects an opaque target when its plugin ownership metadata is missing", () => {
     const binding = createBinding({
@@ -373,74 +438,21 @@ describe("runtime conversation binding route", () => {
       }),
     ).toThrow();
   });
-
-  it("inspects a runtime-bound route without touching the binding", () => {
-    const { touch } = registerAdapter(createBinding());
-
-    const result = resolveRuntimeConversationBindingRoute({
-      route: createRoute(),
-      touchBinding: false,
-      conversation: {
-        channel: "demo",
-        accountId: "default",
-        conversationId: "room-1",
-      },
-    });
-
-    expect(touch).not.toHaveBeenCalled();
-    expect(result.bindingOwnerAvailable).toBe(true);
-    expect(result.boundSessionKey).toBe("agent:review:acp:session-1");
-  });
-
-  it("ignores runtime bindings that target isolated cron run sessions", () => {
-    const route = createRoute();
-    const binding = createBinding({
-      targetSessionKey: "agent:youtube:cron:monthly-report:run:closed-run-1",
-    });
-    const { touch } = registerAdapter(binding);
-
-    const result = resolveRuntimeConversationBindingRoute({
-      route,
-      conversation: {
-        channel: "demo",
-        accountId: "default",
-        conversationId: "room-1",
-      },
-    });
-
-    expect(touch).not.toHaveBeenCalled();
-    expect(result.bindingRecord).toBeNull();
-    expect(result.boundSessionKey).toBeUndefined();
-    expect(Object.fromEntries(Object.entries(result.route))).toEqual(route);
-    expect(readConversationBindingRouteFacts(route)).toBeUndefined();
-    expect(Object.isFrozen(readConversationBindingRouteFacts(result.route))).toBe(true);
-    expect(readConversationBindingRouteFacts(result.route)?.kind).toBe("none");
-  });
 });
 
 describe("ensureConfiguredBindingRouteReady", () => {
-  let unregisterDriver: (() => void) | undefined;
-
   afterEach(() => {
     vi.useRealTimers();
-    unregisterDriver?.();
+    acpReadiness.mockReset();
   });
 
   it("returns a bounded failure when target readiness never settles", async () => {
     vi.useFakeTimers();
-    unregisterDriver = registerStatefulBindingTargetDriver({
-      id: "slow",
-      ensureReady: async () => await new Promise<never>(() => {}),
-      ensureSession: async () => ({
-        ok: false,
-        sessionKey: "agent:slow:binding",
-        error: "not used",
-      }),
-    });
+    acpReadiness.mockImplementation(async () => await new Promise<never>(() => {}));
 
     const resultPromise = ensureConfiguredBindingRouteReady({
       cfg: {} as never,
-      bindingResolution: { statefulTarget: { driverId: "slow" } } as never,
+      bindingResolution: { statefulTarget: { driverId: "acp" } } as never,
     });
 
     await vi.advanceTimersByTimeAsync(30_000);
@@ -449,5 +461,36 @@ describe("ensureConfiguredBindingRouteReady", () => {
       ok: false,
       error: "Configured binding route ready check timed out",
     });
+  });
+
+  it("keeps the configured route agent as dispatch owner for free ACP harness bindings", () => {
+    // Regression for openclaw/openclaw#146365: with explicit ownership the harness id
+    // (e.g. claude) is not a configured agent, so dispatch must use the channel owner.
+    const harnessKey = "agent:claude:acp:11111111-2222-4333-8555-666666666666";
+    const result = inspectRuntimeConversationBindingRoute({
+      route: createRoute(),
+      inspection: {
+        status: "available",
+        binding: createBinding({ targetSessionKey: harnessKey }),
+      },
+    });
+
+    expect(result.route.sessionKey).toBe(harnessKey);
+    expect(result.route.agentId).toBe("claude");
+    expect(result.route).toMatchObject({ ownerAgentId: "main" });
+  });
+
+  it("does not set a dispatch owner for configured acp:binding keys", () => {
+    const bindingKey = "agent:main:acp:binding:discord:default:9373ab192b2317f4";
+    const result = inspectRuntimeConversationBindingRoute({
+      route: createRoute(),
+      inspection: {
+        status: "available",
+        binding: createBinding({ targetSessionKey: bindingKey }),
+      },
+    });
+
+    expect(result.route.sessionKey).toBe(bindingKey);
+    expect(result.route.ownerAgentId).toBeUndefined();
   });
 });
