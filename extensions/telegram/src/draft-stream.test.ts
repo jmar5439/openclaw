@@ -517,6 +517,28 @@ describe("createTelegramDraftStream", () => {
     }
   });
 
+  it("never deletes a finalized preview on clear (same-bubble final answer)", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = createMockDraftApi();
+      const stream = createDraftStream(api);
+
+      // Tool progress preview, then finalized in place like a delivered answer.
+      stream.update("Working");
+      await stream.flush();
+      await stream.stop();
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+
+      // A late teardown must retain the delivered bubble instead of dropping
+      // it seconds after delivery.
+      await stream.clear();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("sends first update immediately after forceNewMessage within throttle window", async () => {
     vi.useFakeTimers();
     try {
