@@ -46,7 +46,9 @@ jobs:
       - id: pack
         run: |
           mkdir -p ./dist-pack
-          tgz="$(pnpm pack --pack-destination ./dist-pack | tail -1)"
+          pnpm pack --pack-destination "${PWD}/dist-pack"
+          tgz="$(ls -1 ./dist-pack/*.tgz | head -1)"
+          test -n "$tgz" && test -f "$tgz"
           echo "tarball=$tgz" >> "$GITHUB_OUTPUT"
           ls -la ./dist-pack/
       - uses: actions/upload-artifact@v4
