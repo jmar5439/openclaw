@@ -46,8 +46,7 @@ jobs:
       - id: pack
         run: |
           mkdir -p ./dist-pack
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));delete p.bundleDependencies;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
-          pnpm pack --pack-destination "${PWD}/dist-pack"
+          node --import ./scripts/tsx.mjs scripts/package-openclaw-for-docker.mts --allow-unreleased-changelog --output-dir "${PWD}/dist-pack"
           tgz="$(ls -1 ./dist-pack/*.tgz | head -1)"
           test -n "$tgz" && test -f "$tgz"
           echo "tarball=$tgz" >> "$GITHUB_OUTPUT"
