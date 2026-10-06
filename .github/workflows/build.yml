@@ -77,8 +77,10 @@ jobs:
             set -e
             export PATH=\"\$HOME/.npm-global/bin:\$PATH\"
             npm i -g /tmp/openclaw-fork.tgz
-            openclaw gateway restart
-            sleep 45
+            openclaw gateway stop --force
+            sleep 10
+            openclaw gateway start
+            sleep 60
             ver=\"\$(openclaw --version | head -1)\"
             echo \"installed: \$ver\"
             echo \"\$ver\" | grep -q '${{ needs.build.outputs.package-version }}' || (echo \"version mismatch\"; exit 1)
