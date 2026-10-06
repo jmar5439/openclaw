@@ -32,7 +32,8 @@ jobs:
           echo "package-version=$suffixed" >> "$GITHUB_OUTPUT"
       - id: pack
         run: |
-          tgz="$(pnpm pack --pack-destination ./dist-pack 2>/dev/null | tail -1)"
+          mkdir -p ./dist-pack
+          tgz="$(pnpm pack --pack-destination ./dist-pack | tail -1)"
           echo "tarball=$tgz" >> "$GITHUB_OUTPUT"
           ls -la ./dist-pack/
       - uses: actions/upload-artifact@v4
