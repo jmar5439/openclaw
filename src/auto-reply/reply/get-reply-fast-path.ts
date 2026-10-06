@@ -111,7 +111,7 @@ export function initFastReplySessionState(params: {
     ctx.CommandTargetSessionKey,
     resolveSessionParentSessionKey(sessionKey),
   ].filter((key): key is string => typeof key === "string");
-  const snapshot = await loadReplySessionInitializationSnapshot({
+  const snapshot = loadReplySessionInitializationSnapshot({
     agentId: initAgentId,
     storePath,
     sessionKey,
