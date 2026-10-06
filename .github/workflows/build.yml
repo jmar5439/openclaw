@@ -8,6 +8,17 @@ on:
       - fix/acp-bound-dispatch-gates
       - fix/sessions-acp-agent-resolution
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or SHA to build (leave default to build this branch)"
+        required: false
+        default: ci/build-fork
+        type: string
+      deploy:
+        description: "Deploy to the VPS gateway after build (PROD — ask first)"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -17,6 +28,8 @@ jobs:
       tarball: ${{ steps.pack.outputs.tarball }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - run: corepack enable && corepack prepare --activate
       - uses: actions/setup-node@v5
         with:
@@ -44,7 +57,7 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
