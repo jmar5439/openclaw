@@ -390,7 +390,9 @@ export async function gatherDispatchRequest(
   const sessionAgentId = resolveSessionAgentId({
     sessionKey: acpDispatchSessionKey,
     config: cfg,
-    fallbackAgentId: ctx.AgentId,
+    fallbackAgentId: isFreeAcpSessionKey(acpDispatchSessionKey)
+      ? (resolveRouteOwnerAgentId(ctx.RouteOwnerAgentId) ?? ctx.AgentId)
+      : ctx.AgentId,
   });
   const sessionAgentCfg = resolveAgentConfig(cfg, sessionAgentId);
   const verboseProgress = createShouldEmitVerboseProgress({
