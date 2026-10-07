@@ -17,6 +17,8 @@ import { normalizeAgentId, parseAgentSessionKey } from "../../routing/session-ke
 export type AcpSessionStoreEntry = {
   cfg: OpenClawConfig;
   agentId?: string;
+  /** Physical store owner; differs from agentId for free harness sessions. */
+  storeAgentId?: string;
   storePath: string;
   sessionKey: string;
   storeSessionKey: string;
@@ -48,7 +50,13 @@ export function resolveSessionStorePathForAcp(params: {
   agentId?: string;
   cfg?: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
-}): { cfg: OpenClawConfig; agentId: string; storePath: string; storeSessionKey: string } {
+}): {
+  cfg: OpenClawConfig;
+  agentId: string;
+  storeAgentId: string;
+  storePath: string;
+  storeSessionKey: string;
+} {
   const cfg = params.cfg ?? getRuntimeConfig();
   const parsed = parseAgentSessionKey(params.sessionKey);
   const requestedAgentId = params.agentId?.trim() ? normalizeAgentId(params.agentId) : undefined;
@@ -131,6 +139,7 @@ export function resolveSessionStorePathForAcp(params: {
     cfg,
     storeSessionKey,
     agentId: resolvedAgentId,
+    storeAgentId,
     storePath: resolveSessionStorePathCore(cfg.session?.store, {
       agentId: storeAgentId,
       env: params.env,
@@ -148,6 +157,7 @@ export function readSessionEntryFromStore(params: {
 }): {
   cfg: OpenClawConfig;
   agentId?: string;
+  storeAgentId?: string;
   storePath?: string;
   storeSessionKey: string;
   entry?: SessionEntry;
@@ -156,6 +166,7 @@ export function readSessionEntryFromStore(params: {
   const {
     cfg,
     agentId,
+    storeAgentId,
     storePath,
     storeSessionKey: canonicalKey,
   } = resolveSessionStorePathForAcp({
@@ -166,16 +177,17 @@ export function readSessionEntryFromStore(params: {
   });
   try {
     const { storeSessionKey, entry } = resolveStoreEntryForSessionKey({
-      ...(agentId ? { agentId } : {}),
+      ...(storeAgentId ? { agentId: storeAgentId } : {}),
       storePath,
       sessionKey: canonicalKey,
       ...(params.clone === false ? { clone: false } : {}),
     });
-    return { cfg, agentId, storePath, storeSessionKey, entry };
+    return { cfg, agentId, storeAgentId, storePath, storeSessionKey, entry };
   } catch {
     return {
       cfg,
       agentId,
+      storeAgentId,
       storePath,
       storeSessionKey: canonicalKey,
       storeReadFailed: true,

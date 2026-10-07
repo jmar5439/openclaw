@@ -88,7 +88,7 @@ async function mutateAcpSessionMeta(
   }
   return withSessionEntryReadOnlyInWorker(
     {
-      agentId: store.agentId,
+      agentId: store.storeAgentId,
       storePath: store.storePath,
       sessionKey: store.storeSessionKey,
       env: captured.env,

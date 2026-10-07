@@ -62,12 +62,14 @@ async function persistSpawnedSessionLabel(params: {
 
   const now = Date.now();
   // Cross-agent ACP keys belong to the target agent's store, which can differ
-  // from the requester's store during spawn.
-  const { storePath, agentId } = resolveSessionStorePathForAcp({
+  // from the requester's store during spawn. Storage calls use the harness
+  // store agent; the resolved owner is only for config-gated use (#146365).
+  const { storePath, storeAgentId } = resolveSessionStorePathForAcp({
     cfg: params.commandParams.cfg,
     sessionKey: params.sessionKey,
     agentId: params.agentId,
   });
+  const agentId = storeAgentId;
 
   // Only the requester store has an in-memory snapshot to keep coherent.
   params.commandParams.command.assertOwnerCurrent?.();
