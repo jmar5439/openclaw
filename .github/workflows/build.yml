@@ -75,21 +75,22 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "${{ secrets.VPS_SSH_HOST }}" >> ~/.ssh/known_hosts
           scp ./deploy-pkg/*.tgz "${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_SSH_HOST }}:/tmp/openclaw-fork.tgz"
-          ssh "${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_SSH_HOST }}" "
-            set -e
-            export PATH=\"$HOME/.npm-global/bin:$PATH\"
-            avail_kb="$(df -k /tmp | tail -1 | awk '{print $4}')"
-            if [ "$avail_kb" -lt 2097152 ]; then npm cache clean --force; fi
-            avail_kb="$(df -k /tmp | tail -1 | awk '{print $4}')"
-            test "$avail_kb" -ge 1048576 || { echo "disk full, refusing install"; exit 1; }
-            npm i -g /tmp/openclaw-fork.tgz
-            openclaw gateway stop --force
-            sleep 10
-            openclaw gateway start
-            sleep 60
-            ver=\"\$(openclaw --version | head -1)\"
-            echo \"installed: \$ver\"
-            echo \"\$ver\" | grep -q '${{ needs.build.outputs.package-version }}' || (echo \"version mismatch\"; exit 1)
-            test -d ~/.openclaw/extensions && ls ~/.openclaw/extensions | head -5
-            systemctl --user is-active openclaw-gateway.service
-          "
+          ssh "${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_SSH_HOST }}" "bash -s -- '${{ needs.build.outputs.package-version }}'" <<'REMOTE'
+          set -e
+          expected_version="$1"
+          export PATH="$HOME/.npm-global/bin:$PATH"
+          avail_kb="$(df -k /tmp | tail -1 | awk '{print $4}')"
+          if [ "$avail_kb" -lt 2097152 ]; then npm cache clean --force; fi
+          avail_kb="$(df -k /tmp | tail -1 | awk '{print $4}')"
+          test "$avail_kb" -ge 1048576 || { echo "disk full, refusing install"; exit 1; }
+          npm i -g /tmp/openclaw-fork.tgz
+          openclaw gateway stop --force
+          sleep 10
+          openclaw gateway start
+          sleep 60
+          ver="$(openclaw --version | head -1)"
+          echo "installed: $ver"
+          echo "$ver" | grep -Fq "$expected_version" || { echo "version mismatch"; exit 1; }
+          test -d ~/.openclaw/extensions && ls ~/.openclaw/extensions | head -5
+          systemctl --user is-active openclaw-gateway.service
+          REMOTE
