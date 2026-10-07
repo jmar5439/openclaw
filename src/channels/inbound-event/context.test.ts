@@ -1,6 +1,10 @@
 // Inbound event context tests cover channel event context construction before routing.
 import { describe, expect, it, vi } from "vitest";
 import {
+  resolveConversationBindingSelection,
+  withConversationBindingRouteFacts,
+} from "../conversation-binding-route-facts.js";
+import {
   buildChannelInboundEventContext,
   finalizeChannelInboundContext,
   resolveInboundSupplementalSenderAllowed,
@@ -109,6 +113,34 @@ describe("resolveInboundSupplementalSenderAllowed", () => {
 });
 
 describe("buildChannelInboundEventContext", () => {
+  it("projects the bound session owner into the serializable inbound context", () => {
+    const targetSessionKey = "agent:opencode:acp:session-1";
+    const conversation = {
+      channel: "test",
+      accountId: "acct",
+      conversationId: "room-1",
+    };
+    const route = withConversationBindingRouteFacts(
+      {
+        agentId: "main",
+        sessionKey: targetSessionKey,
+        routeSessionKey: targetSessionKey,
+      },
+      resolveConversationBindingSelection({
+        bindingId: "binding-1",
+        targetSessionKey,
+        targetKind: "session",
+        conversation,
+        status: "active",
+        boundAt: 1,
+      }),
+      "main",
+      conversation,
+    );
+
+    expect(buildTestInboundEventContext({ route }).RouteOwnerAgentId).toBe("main");
+  });
+
   it("does not claim authoritative route facts when the producer omits the route peer", () => {
     const ctx = buildTestInboundEventContext({
       conversation: { kind: "group", id: "room-1" },
