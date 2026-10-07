@@ -19,9 +19,15 @@ on:
         required: false
         default: false
         type: boolean
+      inspect:
+        description: "Inspect VPS disk, package, and gateway status"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.inspect != true
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max-old-space-size=8192
@@ -93,4 +99,29 @@ jobs:
           echo "$ver" | grep -Fq "$expected_version" || { echo "version mismatch"; exit 1; }
           test -d ~/.openclaw/extensions && ls ~/.openclaw/extensions | head -5
           systemctl --user is-active openclaw-gateway.service
+          REMOTE
+
+  inspect:
+    if: github.event_name == 'workflow_dispatch' && inputs.inspect == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+      - run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.VPS_SSH_HOST }}" >> ~/.ssh/known_hosts
+          ssh "${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_SSH_HOST }}" 'bash -s' <<'REMOTE'
+          set +e
+          export PATH="$HOME/.npm-global/bin:$PATH"
+          echo '--- filesystem ---'
+          df -h / /tmp
+          echo '--- package in /tmp ---'
+          ls -lh /tmp/openclaw-fork.tgz
+          echo '--- installed version ---'
+          openclaw --version
+          echo '--- service ---'
+          systemctl --user --no-pager status openclaw-gateway.service
+          echo '--- gateway status ---'
+          openclaw gateway status --deep
           REMOTE
