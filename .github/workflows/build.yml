@@ -23,6 +23,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+      OPENCLAW_RUN_NODE_SKIP_DTS_BUILD: "1"
     outputs:
       package-version: ${{ steps.version.outputs.package-version }}
       tarball: ${{ steps.pack.outputs.tarball }}
@@ -36,7 +39,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: NODE_OPTIONS=--max-old-space-size=8192 pnpm build
       - id: version
         run: |
           base="$(node -p "require('./package.json').version")"
