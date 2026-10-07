@@ -137,8 +137,11 @@ export function readConversationBindingRouteFacts(
 
 export function resolveConversationBindingRouteOwnerAgentId(
   value: Carrier,
-  sessionKey: string,
+  sessionKey: string | undefined,
 ): string | undefined {
+  if (!sessionKey) {
+    return undefined;
+  }
   const facts = readConversationBindingRouteFacts(value);
   if (facts?.kind !== "agent" || facts.targetSessionKey !== sessionKey) {
     return undefined;
