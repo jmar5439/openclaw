@@ -124,4 +124,6 @@ jobs:
           systemctl --user --no-pager status openclaw-gateway.service
           echo '--- gateway status ---'
           openclaw gateway status --deep
+          echo '--- live gateway logs (25s) ---'
+          timeout 25 openclaw logs --follow
           REMOTE
