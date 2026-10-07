@@ -51,6 +51,7 @@ import {
   stripExtractedFileImageMetadata,
   type ExtractedFileImage,
 } from "../../media-understanding/extracted-file-images.js";
+import { resolveChannelRouteAgentId } from "../../routing/route-binding-index.js";
 import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { recordAcceptedSessionParticipantInput } from "../../sessions/session-participant-input-recording.js";
 import { prepareChannelParticipantObservation } from "../../sessions/session-participant-input.js";
@@ -300,10 +301,12 @@ export async function tryDispatchAcpReplyCore(params: {
       sessionKey,
       // Bound free-ACP sessions carry the configured channel owner on the
       // route; without it a multi-agent fleet cannot select an owner (#146365).
+      // Unbound sessions fall back to the channel account's configured agent.
       fallbackAgentId:
         normalizeOptionalString(params.ctx.RouteOwnerAgentId) ??
         resolveConversationBindingRouteOwnerAgentId(params.ctx, sessionKey) ??
-        params.ctx.AgentId,
+        params.ctx.AgentId ??
+        resolveChannelRouteAgentId(params.cfg, params.ctx.OriginatingChannel, params.ctx.AccountId),
     }),
     assertCurrent: assertInputCurrent,
   });

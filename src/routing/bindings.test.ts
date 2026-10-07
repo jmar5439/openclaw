@@ -6,6 +6,7 @@ import {
   resolveDefaultAgentBoundAccountId,
 } from "./bindings.js";
 import { resolveFirstBoundAccountId } from "./bound-account-read.js";
+import { resolveChannelRouteAgentId } from "./route-binding-index.js";
 
 describe("route binding account helpers", () => {
   it.each([undefined, "", "  "])("includes implicit account %j in diagnostics", (accountId) => {
@@ -87,4 +88,33 @@ describe("route binding account helpers", () => {
       );
     },
   );
+});
+
+describe("resolveChannelRouteAgentId", () => {
+  const cfg: OpenClawConfig = {
+    agents: { entries: { main: {}, developer: {} } },
+    bindings: [
+      { agentId: "main", match: { channel: "telegram", accountId: "main" } },
+      { agentId: "developer", match: { channel: "telegram", accountId: "dev" } },
+    ],
+  };
+
+  it("resolves the configured agent for an exact channel account", async () => {
+    expect(resolveChannelRouteAgentId(cfg, "telegram", "dev")).toBe("developer");
+    expect(resolveChannelRouteAgentId(cfg, "telegram", "main")).toBe("main");
+  });
+
+  it("returns undefined without a channel or matching binding", async () => {
+    expect(resolveChannelRouteAgentId(cfg, undefined, "dev")).toBeUndefined();
+    expect(resolveChannelRouteAgentId(cfg, "slack", "dev")).toBeUndefined();
+    expect(resolveChannelRouteAgentId(cfg, "telegram", "nope")).toBeUndefined();
+  });
+
+  it("skips bindings whose agent is not configured", async () => {
+    const stale: OpenClawConfig = {
+      agents: { entries: { main: {} } },
+      bindings: [{ agentId: "ghost", match: { channel: "telegram", accountId: "dev" } }],
+    };
+    expect(resolveChannelRouteAgentId(stale, "telegram", "dev")).toBeUndefined();
+  });
 });
