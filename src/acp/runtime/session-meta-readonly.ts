@@ -13,6 +13,7 @@ import {
 import {
   type AcpSessionEntryBinding,
   type AcpSessionRow,
+  buildAcpDatabaseSessionHarnessFallbackKey,
   buildAcpDatabaseSessionKey,
   legacyAcpDatabaseSessionKeys,
   resolveLegacyFreeAcpSessionKey,
@@ -52,14 +53,25 @@ export async function readAcpSessionMetaForEntries(
     { env: params.env, path: params.databasePath },
     {
       type: "acpSessions.metadata",
-      entries: entries.map(({ sessionKey, agentId, entry }) => ({
-        keys: [
-          buildAcpDatabaseSessionKey(sessionKey, agentId),
-          ...legacyAcpDatabaseSessionKeys(sessionKey, agentId, params.cfg),
-        ],
-        legacyKey: resolveLegacyFreeAcpSessionKey(sessionKey),
-        entry,
-      })),
+      entries: entries.map(({ sessionKey, agentId, entry }) => {
+        // Free ACP harness rows are keyed by harness id while callers
+        // increasingly resolve a configured owner (#146365). The worker tries
+        // keys in order, so the explicit key keeps precedence with the harness
+        // key as fallback.
+        const harnessFallbackKey = buildAcpDatabaseSessionHarnessFallbackKey(
+          sessionKey,
+          agentId,
+        );
+        return {
+          keys: [
+            buildAcpDatabaseSessionKey(sessionKey, agentId),
+            ...(harnessFallbackKey ? [harnessFallbackKey] : []),
+            ...legacyAcpDatabaseSessionKeys(sessionKey, agentId, params.cfg),
+          ],
+          legacyKey: resolveLegacyFreeAcpSessionKey(sessionKey),
+          entry,
+        };
+      }),
     },
     options,
   );
