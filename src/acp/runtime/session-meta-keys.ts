@@ -205,6 +205,28 @@ export function selectLegacyFreeAcpSessionRows(
   return rowsByKey;
 }
 
+/**
+ * Harness fallback key for free ACP sessions (#146365). Rows are keyed by
+ * harness id while callers increasingly resolve a configured owner; trying
+ * the harness key keeps owner-scoped reads finding existing metadata.
+ */
+export function buildAcpDatabaseSessionHarnessFallbackKey(
+  storeSessionKey: string,
+  agentId?: string,
+): string | undefined {
+  const parsed = parseAgentSessionKey(normalizeLowercaseStringOrEmpty(storeSessionKey));
+  const rest = parsed?.rest ?? "";
+  if (
+    !parsed?.agentId ||
+    !rest.startsWith("acp:") ||
+    rest.startsWith("acp:binding:") ||
+    normalizeAgentId(agentId ?? "") === normalizeAgentId(parsed.agentId)
+  ) {
+    return undefined;
+  }
+  return buildAcpDatabaseSessionKey(storeSessionKey, parsed.agentId);
+}
+
 export function selectAcpSessionRowForStoreEntry(
   db: DatabaseSync,
   storeSessionKey: string,
@@ -212,9 +234,11 @@ export function selectAcpSessionRowForStoreEntry(
   cfg?: OpenClawConfig,
   entry?: AcpSessionEntryBinding,
 ): AcpSessionRow | undefined {
+  const harnessFallbackKey = buildAcpDatabaseSessionHarnessFallbackKey(storeSessionKey, agentId);
   return selectAcpSessionRowForRead(db, {
     keys: [
       buildAcpDatabaseSessionKey(storeSessionKey, agentId),
+      ...(harnessFallbackKey ? [harnessFallbackKey] : []),
       ...legacyAcpDatabaseSessionKeys(storeSessionKey, agentId, cfg),
     ],
     legacyKey: resolveLegacyFreeAcpSessionKey(storeSessionKey),

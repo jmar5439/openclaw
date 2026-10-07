@@ -8,7 +8,7 @@ import * as stateDatabase from "../../state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../../test-utils/openclaw-test-state.js";
 import { repairAcpSessionMetaKeysForDoctor } from "./session-meta-doctor.js";
 import { buildAcpDatabaseSessionKey } from "./session-meta-keys.js";
-import { writeAcpSessionMetaForMigration } from "./session-meta.js";
+import { readAcpSessionMetaBatch, writeAcpSessionMetaForMigration } from "./session-meta.js";
 
 const cfg = { agents: { ownership: "explicit" as const, entries: { main: {} } } };
 const key = "agent:harness:acp:key-repair";
@@ -246,3 +246,33 @@ it.each(["revoked-authority", "changed-source", "changed-binding"])(
     });
   },
 );
+
+it("batch reads find harness-keyed metadata through a configured owner (#146365)", async () => {
+  await withOpenClawTestState({ scenario: "empty" }, async ({ env }) => {
+    const sessionKey = "agent:opencode:acp:owner-read-harness";
+    const entry = {
+      sessionId: "owner-read-session",
+      lifecycleRevision: "owner-read-revision",
+      sessionStartedAt: 50,
+      updatedAt: 100,
+    };
+    // Rows are keyed by harness id, as spawn writes them.
+    writeAcpSessionMetaForMigration({
+      env,
+      sessionKey: buildAcpDatabaseSessionKey(sessionKey, "opencode"),
+      lifecycleRevision: entry.lifecycleRevision,
+      meta,
+      now: () => 100,
+    });
+    const byOwner = readAcpSessionMetaBatch({
+      env,
+      entries: [{ agentId: "main", sessionKey, entry }],
+    });
+    expect(byOwner.get(entry)).toEqual(meta);
+    const byHarness = readAcpSessionMetaBatch({
+      env,
+      entries: [{ agentId: "opencode", sessionKey, entry }],
+    });
+    expect(byHarness.get(entry)).toEqual(meta);
+  });
+});

@@ -10,6 +10,7 @@ import {
 } from "../../state/openclaw-state-db.js";
 import {
   acpSessionRowMatchesEntry,
+  buildAcpDatabaseSessionHarnessFallbackKey,
   buildAcpDatabaseSessionKey,
   getAcpSessionKysely,
   legacyAcpDatabaseSessionKeys,
@@ -56,7 +57,12 @@ export function readAcpSessionMetaBatch(params: {
   const result = new Map<SessionEntry, SessionAcpMeta | undefined>();
   const entriesByKey = new Map<
     string,
-    Array<{ entry: SessionEntry; rawSessionKey: string; legacyKeys: string[] }>
+    Array<{
+      entry: SessionEntry;
+      rawSessionKey: string;
+      legacyKeys: string[];
+      harnessFallbackKey?: string;
+    }>
   >();
   for (const item of params.entries) {
     const rawSessionKey = item.sessionKey.trim();
@@ -66,8 +72,12 @@ export function readAcpSessionMetaBatch(params: {
       continue;
     }
     const legacyKeys = legacyAcpDatabaseSessionKeys(rawSessionKey, item.agentId, params.cfg);
+    const harnessFallbackKey = buildAcpDatabaseSessionHarnessFallbackKey(
+      rawSessionKey,
+      item.agentId,
+    );
     const entries = entriesByKey.get(sessionKey) ?? [];
-    entries.push({ entry: item.entry, rawSessionKey, legacyKeys });
+    entries.push({ entry: item.entry, rawSessionKey, legacyKeys, harnessFallbackKey });
     entriesByKey.set(sessionKey, entries);
   }
   if (entriesByKey.size === 0) {
@@ -83,6 +93,9 @@ export function readAcpSessionMetaBatch(params: {
       for (const [sessionKey, entries] of entriesByKey) {
         requestedKeySet.add(sessionKey);
         for (const item of entries) {
+          if (item.harnessFallbackKey) {
+            requestedKeySet.add(item.harnessFallbackKey);
+          }
           for (const legacyKey of item.legacyKeys) {
             requestedKeySet.add(legacyKey);
           }
@@ -104,7 +117,11 @@ export function readAcpSessionMetaBatch(params: {
       const unresolved: Array<{ entry: SessionEntry; key: string }> = [];
       for (const [sessionKey, entries] of entriesByKey) {
         for (const item of entries) {
-          const row = [sessionKey, ...item.legacyKeys]
+          const row = [
+            sessionKey,
+            ...(item.harnessFallbackKey ? [item.harnessFallbackKey] : []),
+            ...item.legacyKeys,
+          ]
             .map((key) => rowsByKey.get(key))
             .map((candidateRow) =>
               resolveReadableAcpSessionRow({ row: candidateRow, entry: item.entry }),
