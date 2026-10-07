@@ -8,6 +8,7 @@ import {
   resolveSessionAgentId,
 } from "../../agents/agent-scope.js";
 import type { PreparedReplyDispatchRuntime } from "../../agents/prepared-model-runtime.types.js";
+import { resolveConversationBindingRouteOwnerAgentId } from "../../channels/conversation-binding-route-facts.js";
 import { normalizeExplicitSessionKey } from "../../config/sessions/explicit-session-key-normalization.js";
 import {
   deriveInboundMessageHookContext,
@@ -391,7 +392,11 @@ export async function gatherDispatchRequest(
     sessionKey: acpDispatchSessionKey,
     config: cfg,
     fallbackAgentId: isFreeAcpSessionKey(acpDispatchSessionKey)
-      ? (resolveRouteOwnerAgentId(ctx.RouteOwnerAgentId) ?? ctx.AgentId)
+      ? (resolveRouteOwnerAgentId(ctx.RouteOwnerAgentId) ??
+        resolveRouteOwnerAgentId(
+          resolveConversationBindingRouteOwnerAgentId(ctx, acpDispatchSessionKey),
+        ) ??
+        ctx.AgentId)
       : ctx.AgentId,
   });
   const sessionAgentCfg = resolveAgentConfig(cfg, sessionAgentId);
@@ -429,7 +434,8 @@ export async function gatherDispatchRequest(
   // Channel routing that already presents the free harness key as SessionKey names that owner
   // in RouteOwnerAgentId; the key itself cannot recover it.
   const routeOwnerAgentId = isFreeAcpSessionKey(sessionKey)
-    ? resolveRouteOwnerAgentId(ctx.RouteOwnerAgentId)
+    ? (resolveRouteOwnerAgentId(ctx.RouteOwnerAgentId) ??
+      resolveRouteOwnerAgentId(resolveConversationBindingRouteOwnerAgentId(ctx, sessionKey)))
     : undefined;
   const preparedReplyDispatchAgentId =
     routeOwnerAgentId ??

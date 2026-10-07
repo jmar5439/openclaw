@@ -34,6 +34,7 @@ import { claimPreparedPendingAgentQuestionAnswer } from "../../agents/harness/ga
 import { toolPolicyRestrictsTools } from "../../agents/tool-policy.js";
 import { recordRuntimeActionDecision } from "../../audit/runtime-action-decision.js";
 import type { ChatType } from "../../channels/chat-type.js";
+import { resolveConversationBindingRouteOwnerAgentId } from "../../channels/conversation-binding-route-facts.js";
 import { readChannelContextAdmissionEvidence } from "../../channels/message-access/admission-evidence.js";
 import { resolveSessionStorePathCore } from "../../config/sessions/paths.js";
 import type { PrepareAssistantTranscriptMessage } from "../../config/sessions/transcript-assistant-delivery.js";
@@ -299,7 +300,10 @@ export async function tryDispatchAcpReplyCore(params: {
       sessionKey,
       // Bound free-ACP sessions carry the configured channel owner on the
       // route; without it a multi-agent fleet cannot select an owner (#146365).
-      fallbackAgentId: params.ctx.RouteOwnerAgentId ?? params.ctx.AgentId,
+      fallbackAgentId:
+        normalizeOptionalString(params.ctx.RouteOwnerAgentId) ??
+        resolveConversationBindingRouteOwnerAgentId(params.ctx, sessionKey) ??
+        params.ctx.AgentId,
     }),
     assertCurrent: assertInputCurrent,
   });

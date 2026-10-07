@@ -1,7 +1,10 @@
 // Optional utility preprocessing keeps its runtime loaders lazy and cancellation explicit.
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
-import { readConversationBindingRouteFacts } from "../../channels/conversation-binding-route-facts.js";
+import {
+  readConversationBindingRouteFacts,
+  resolveConversationBindingRouteOwnerAgentId,
+} from "../../channels/conversation-binding-route-facts.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
 import { createAbortError, isAbortError } from "../../infra/abort-signal.js";
@@ -109,7 +112,9 @@ export async function resolveReplyAgentScope(params: { cfg: OpenClawConfig; ctx:
     if (!isFreeAcpSessionKey(agentSessionKey)) {
       return undefined;
     }
-    const trimmed = normalizeOptionalString(ctx.RouteOwnerAgentId);
+    const trimmed =
+      normalizeOptionalString(ctx.RouteOwnerAgentId) ??
+      normalizeOptionalString(resolveConversationBindingRouteOwnerAgentId(ctx, agentSessionKey));
     if (!trimmed) {
       return undefined;
     }
