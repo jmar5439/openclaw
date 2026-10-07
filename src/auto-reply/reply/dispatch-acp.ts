@@ -297,7 +297,9 @@ export async function tryDispatchAcpReplyCore(params: {
     agentId: resolveSessionAgentId({
       config: params.cfg,
       sessionKey,
-      fallbackAgentId: params.ctx.AgentId,
+      // Bound free-ACP sessions carry the configured channel owner on the
+      // route; without it a multi-agent fleet cannot select an owner (#146365).
+      fallbackAgentId: params.ctx.RouteOwnerAgentId ?? params.ctx.AgentId,
     }),
     assertCurrent: assertInputCurrent,
   });
