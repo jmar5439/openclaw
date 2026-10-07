@@ -23,7 +23,10 @@ import type { ContextVisibilityMode } from "../../config/types.base.js";
 import type { GroupToolPolicyConfig } from "../../config/types.tools.js";
 import type { PluginHookChannelContext } from "../../plugins/hook-channel-context.types.js";
 import { shouldIncludeSupplementalContext } from "../../security/context-visibility.js";
-import { copyConversationBindingRouteFacts } from "../conversation-binding-route-facts.js";
+import {
+  copyConversationBindingRouteFacts,
+  resolveConversationBindingRouteOwnerAgentId,
+} from "../conversation-binding-route-facts.js";
 import type { InboundImplicitMentionKind } from "../mention-gating.js";
 import type {
   ChannelIngressCommandAccess,
@@ -488,6 +491,12 @@ function buildChannelInboundEventContextValue(
     message: params.message,
     access: params.access,
   });
+  const routeOwnerAgentId =
+    params.route.ownerAgentId ??
+    resolveConversationBindingRouteOwnerAgentId(
+      params.route,
+      params.route.dispatchSessionKey ?? params.route.routeSessionKey,
+    );
 
   const context = {
     Body: body,
@@ -506,7 +515,7 @@ function buildChannelInboundEventContextValue(
     To: params.reply.to,
     SessionKey: params.route.dispatchSessionKey ?? params.route.routeSessionKey,
     AgentId: params.route.agentId,
-    ...(params.route.ownerAgentId ? { RouteOwnerAgentId: params.route.ownerAgentId } : {}),
+    ...(routeOwnerAgentId ? { RouteOwnerAgentId: routeOwnerAgentId } : {}),
     DmScope: params.route.dmScope,
     AccountId: params.route.accountId ?? params.accountId,
     ParentSessionKey: params.route.parentSessionKey,
