@@ -77,7 +77,11 @@ jobs:
           scp ./deploy-pkg/*.tgz "${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_SSH_HOST }}:/tmp/openclaw-fork.tgz"
           ssh "${{ secrets.VPS_SSH_USER }}@${{ secrets.VPS_SSH_HOST }}" "
             set -e
-            export PATH=\"\$HOME/.npm-global/bin:\$PATH\"
+            export PATH=\"$HOME/.npm-global/bin:$PATH\"
+            avail_kb="$(df -k /tmp | tail -1 | awk '{print $4}')"
+            if [ "$avail_kb" -lt 2097152 ]; then npm cache clean --force; fi
+            avail_kb="$(df -k /tmp | tail -1 | awk '{print $4}')"
+            test "$avail_kb" -ge 1048576 || { echo "disk full, refusing install"; exit 1; }
             npm i -g /tmp/openclaw-fork.tgz
             openclaw gateway stop --force
             sleep 10
