@@ -23,6 +23,7 @@ import type {
   SessionEntry,
   WriteManagerSessionMeta,
 } from "./manager.types.js";
+import { resolveAcpRuntimeAgentId } from "./manager.utils.js";
 import {
   normalizeRuntimeOptions,
   normalizeText,
@@ -76,11 +77,14 @@ export async function runManagerInitializeSession(params: {
   )?.acp;
   assertCurrent();
   input.assertActive?.();
+  // Runtime backends key sessions by the harness namespace on free ACP keys;
+  // the admitted configured owner stays on the persisted handle and metadata.
+  const runtimeAgentId = resolveAcpRuntimeAgentId(sessionKey, agentId);
   const ensured = await withAcpRuntimeErrorBoundary({
     run: async () =>
       await runtime.ensureSession({
         sessionKey,
-        agentId,
+        agentId: runtimeAgentId,
         persistedHandle:
           previousMeta?.backend === backend.id
             ? persistedAcpRuntimeHandle(params, previousMeta)

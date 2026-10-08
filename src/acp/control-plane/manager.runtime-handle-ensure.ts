@@ -35,7 +35,11 @@ import type {
   SessionAcpMeta,
   WriteManagerSessionMeta,
 } from "./manager.types.js";
-import { hasLegacyAcpIdentityProjection, resolveAcpAgentFromSessionKey } from "./manager.utils.js";
+import {
+  hasLegacyAcpIdentityProjection,
+  resolveAcpAgentFromSessionKey,
+  resolveAcpRuntimeAgentId,
+} from "./manager.utils.js";
 import {
   normalizeRuntimeOptions,
   normalizeText,
@@ -120,6 +124,9 @@ export async function ensureManagerRuntimeHandle(params: {
   const backend = params.deps.requireRuntimeBackend(configuredBackend || undefined);
   const runtime = backend.runtime;
   assertAcpRuntimeOwnerSupport(runtime, params);
+  // Runtime backends key sessions by the harness namespace on free ACP keys;
+  // the admitted configured owner stays on metadata, storage, and policy.
+  const runtimeAgentId = resolveAcpRuntimeAgentId(params.sessionKey, params.agentId);
   const cached = params.runtimeHandles.get(params);
   if (cached) {
     const backendMatches = !configuredBackend || cached.backend === configuredBackend;
@@ -197,7 +204,7 @@ export async function ensureManagerRuntimeHandle(params: {
         await runtime.ensureSession({
           persistedHandle,
           sessionKey: params.sessionKey,
-          agentId: params.agentId,
+          agentId: runtimeAgentId,
           agent,
           mode,
           ...(resumeSessionId ? { resumeSessionId } : {}),
@@ -240,7 +247,7 @@ export async function ensureManagerRuntimeHandle(params: {
     await runtime.prepareFreshSession?.({
       persistedHandle,
       sessionKey: params.sessionKey,
-      agentId: params.agentId,
+      agentId: runtimeAgentId,
     });
     if (!isCurrentActor()) {
       throw createSupersededActorError(params.sessionKey);

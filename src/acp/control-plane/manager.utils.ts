@@ -19,6 +19,22 @@ export function resolveAcpAgentFromSessionKey(sessionKey: string, fallback = "ma
   return normalizeAgentId(parsed?.agentId ?? fallback);
 }
 
+/**
+ * Resolves the owner identity a runtime backend must see for an ACP session.
+ * Free ACP harness keys name an execution target, not a configured owner; the
+ * backend (and its owner gate) keys runtime sessions by that harness
+ * namespace, so the admitted configured owner must not replace it here. Every
+ * other key keeps the admitted owner exactly.
+ */
+export function resolveAcpRuntimeAgentId(sessionKey: string, admittedAgentId: string): string {
+  const parsed = parseAgentSessionKey(sessionKey);
+  const rest = parsed?.rest?.toLowerCase() ?? "";
+  if (parsed?.agentId && rest.startsWith("acp:") && !rest.startsWith("acp:binding:")) {
+    return normalizeAgentId(parsed.agentId);
+  }
+  return admittedAgentId;
+}
+
 /** Builds the stale-session error shown when ACP metadata is missing. */
 function resolveMissingMetaError(sessionKey: string): AcpRuntimeError {
   return new AcpRuntimeError(
