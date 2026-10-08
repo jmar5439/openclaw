@@ -492,6 +492,59 @@ describe("createTelegramDraftStream", () => {
     },
   );
 
+  it("retains a confirmed final answer across rotation instead of deleting it", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = createMockDraftApi();
+      api.sendMessage.mockResolvedValueOnce({ message_id: 17 });
+      const onRetainedPage = vi.fn();
+      const stream = createDraftStream(api, { onRetainedPage });
+      stream.update("Final answer");
+      await vi.advanceTimersByTimeAsync(0);
+      await stream.flush();
+      await stream.stop();
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+
+      // A later rotation (e.g. tool-progress reposition racing teardown) must
+      // not drop the visible answer ~1.5s later.
+      stream.rotateToNewMessageDeferringDelete();
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+      expect(onRetainedPage).toHaveBeenCalledWith(expect.objectContaining({ messageId: 17 }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retains a late first send carrying the answer when nothing replaced it", async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveFirstSend: ((value: { message_id: number }) => void) | undefined;
+      const firstSend = new Promise<{ message_id: number }>((resolve) => {
+        resolveFirstSend = resolve;
+      });
+      const api = createMockDraftApi();
+      api.sendMessage.mockReturnValueOnce(firstSend);
+      const onRetainedPage = vi.fn();
+      const stream = createDraftStream(api, { onRetainedPage });
+      stream.update("Final answer");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+
+      // Rotate while the first (and only) send is still in flight, then let it
+      // land without requesting any replacement content.
+      stream.rotateToNewMessageDeferringDelete();
+      resolveFirstSend?.({ message_id: 17 });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onRetainedPage).toHaveBeenCalledWith(expect.objectContaining({ messageId: 17 }));
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not report a first preview cleared while its send is in flight", async () => {
     vi.useFakeTimers();
     try {

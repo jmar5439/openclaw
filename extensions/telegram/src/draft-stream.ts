@@ -398,7 +398,13 @@ export function createTelegramDraftStream(params: {
     }
     if (sendGeneration !== generation) {
       const visibleSinceMs = Date.now();
-      if (repositionedSendGenerations.delete(sendGeneration)) {
+      const superseded = repositionedSendGenerations.delete(sendGeneration);
+      // A reposition only orphans the late send when newer content replaced it.
+      // With nothing requested after the rewind, this bubble is the only visible
+      // trace (e.g. a short final answer whose first send raced teardown): deleting
+      // it drops the delivered answer instead of a stale preview.
+      const replaced = lastRequestedText !== "" || messageSendAttempted;
+      if (superseded && replaced) {
         // Repositioned late sends are stale previews; delete instead of retaining
         // them as durable continuation pages.
         scheduleDetachedDelete(normalizedMessageId, visibleSinceMs, REPOSITION_DELETE_DELAY_MS);
@@ -812,6 +818,16 @@ export function createTelegramDraftStream(params: {
     }
   };
 
+  // A bubble carrying confirmed delivered final content is the answer, not a
+  // stale preview. stop() marks final before attempting the final edit, so a
+  // rejected edit leaves final set while the message still shows the stale
+  // preview; the lane then falls back to a separate send and teardown must
+  // delete the obsolete bubble instead of preserving it beside the fallback.
+  const isFinalContentDelivered = (): boolean =>
+    streamState.final &&
+    (lastDeliveredText.trimEnd() === lastRequestedText.trimEnd() ||
+      remainingFinalContent() !== undefined);
+
   const clear = async () => {
     // Capture before the stop; takeMessageIdAfterStop resets streamVisibleSinceMs.
     const visibleSince = streamVisibleSinceMs;
@@ -825,14 +841,8 @@ export function createTelegramDraftStream(params: {
       },
     });
     // Retain only a preview whose visible content is confirmed delivered final
-    // content. stop() marks final before attempting the final edit, so a
-    // rejected edit leaves final set while the message still shows the stale
-    // preview; the lane then falls back to a separate send and teardown must
-    // delete the obsolete bubble instead of preserving it beside the fallback.
-    const finalContentDelivered =
-      streamState.final &&
-      (lastDeliveredText.trimEnd() === lastRequestedText.trimEnd() ||
-        remainingFinalContent() !== undefined);
+    // content.
+    const finalContentDelivered = isFinalContentDelivered();
     if (finalContentDelivered) {
       // The preview was finalized in place and now carries the delivered
       // answer (same bubble the user watched transform). Deleting it here
@@ -858,9 +868,27 @@ export function createTelegramDraftStream(params: {
     if (messageSendAttempted && streamMessageId === undefined) {
       repositionedSendGenerations.add(generation);
     }
+    // A bubble carrying confirmed delivered final content is the answer the user
+    // already sees: report it as a retained page and rewind WITHOUT scheduling
+    // its deletion. Without this, a rotation racing final delivery drops the
+    // visible answer ~1.5s later (same rule as clear()).
+    const retainsFinalAnswer =
+      typeof supersededMessageId === "number" &&
+      Number.isFinite(supersededMessageId) &&
+      isFinalContentDelivered();
+    if (retainsFinalAnswer) {
+      retainCurrentPage();
+      params.log?.(
+        `telegram stream preview retained on rotation (chat=${chatId}, message=${supersededMessageId})`,
+      );
+    }
     // Rewind WITHOUT deleting; the old id is captured above.
     resetStreamToNewMessage();
-    if (typeof supersededMessageId === "number" && Number.isFinite(supersededMessageId)) {
+    if (
+      !retainsFinalAnswer &&
+      typeof supersededMessageId === "number" &&
+      Number.isFinite(supersededMessageId)
+    ) {
       scheduleDetachedDelete(
         supersededMessageId,
         supersededVisibleSince,
