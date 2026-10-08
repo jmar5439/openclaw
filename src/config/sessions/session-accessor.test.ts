@@ -1238,6 +1238,15 @@ describe("session accessor seam", () => {
     }
   });
 
+  it("admits a configured owner initializing a free ACP harness key", () => {
+    const snapshot = loadReplySessionInitializationSnapshot({
+      agentId: "codex",
+      sessionKey: "agent:opencode:acp:ead9ac51",
+      storePath,
+    });
+    expect(snapshot.currentEntry).toBeUndefined();
+  });
+
   it("normalizes alias inputs before writes and rejects invalid owners", async () => {
     for (const sessionKey of ["main", "agent:ops:main ", "agent:OPS:upper"]) {
       await expect(

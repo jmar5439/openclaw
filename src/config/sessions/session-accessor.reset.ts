@@ -1,5 +1,6 @@
 import { runSqliteDeferredTransactionSync } from "../../infra/sqlite-transaction.js";
 import {
+  isFreeAcpSessionKey,
   isIncognitoSessionKey,
   normalizeAgentId,
   parseAgentSessionKey,
@@ -58,7 +59,13 @@ export class SessionInitializationAgentScopeMismatchError extends Error {
 function assertSessionInitializationAgentScope(agentId: string, sessionKey: string): void {
   const normalizedAgentId = normalizeAgentId(agentId);
   const sessionKeyAgentId = parseAgentSessionKey(sessionKey)?.agentId;
-  if (sessionKeyAgentId && normalizeAgentId(sessionKeyAgentId) !== normalizedAgentId) {
+  if (
+    sessionKeyAgentId &&
+    normalizeAgentId(sessionKeyAgentId) !== normalizedAgentId &&
+    // Free ACP harness keys name an execution target, not a configured owner
+    // (#146365). An admitted configured owner stays valid for initialization.
+    !isFreeAcpSessionKey(sessionKey)
+  ) {
     throw new SessionInitializationAgentScopeMismatchError(normalizedAgentId, sessionKeyAgentId);
   }
 }
