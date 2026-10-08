@@ -235,6 +235,14 @@ export function resetLaneState(turn: Turn, lane: DraftLaneState): void {
 export function repositionLaneForNewMessage(turn: Turn, lane: DraftLaneState): void {
   // Reposition instead of delete-then-repost: the replacement must land
   // before deferred cleanup or Telegram can jump and retain a stale preview.
+  if (lane.finalized) {
+    // The bubble carries the delivered answer (a final edit may have landed in
+    // place without the stream recording final state): rewind the stream
+    // identity WITHOUT scheduling its deletion.
+    lane.stream?.forceNewMessage();
+    resetLaneState(turn, lane);
+    return;
+  }
   lane.stream?.rotateToNewMessageDeferringDelete();
   resetLaneState(turn, lane);
 }
