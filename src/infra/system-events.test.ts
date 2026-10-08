@@ -95,6 +95,20 @@ describe("system events (session routing)", () => {
     expect(() => enqueueSystemEvent("Node: Mac Studio", { sessionKey: " " })).toThrow("sessionKey");
   });
 
+  it("admits a configured owner for free ACP harness keys", () => {
+    const routed = withSystemEventOwner(
+      { sessionKey: "agent:opencode:acp:ead9ac51", contextKey: "model:opencode/m" },
+      "codex",
+    );
+    expect(routed.sessionKey).toBe("agent:opencode:acp:ead9ac51");
+  });
+
+  it("still rejects a mismatched owner on ordinary agent keys", () => {
+    expect(() =>
+      withSystemEventOwner({ sessionKey: "agent:main:telegram:1", contextKey: "x" }, "codex"),
+    ).toThrow("System event owner does not match its session key.");
+  });
+
   it.each(["main", "global", "unknown"])(
     "resolves legacy SDK %s only at its configured owner boundary",
     (alias) => {

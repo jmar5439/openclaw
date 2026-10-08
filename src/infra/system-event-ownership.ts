@@ -1,4 +1,5 @@
 import {
+  isFreeAcpSessionKey,
   normalizeAgentId,
   resolveAgentIdFromSessionKey,
   toAgentStoreSessionKey,
@@ -65,7 +66,15 @@ export function resolveSystemEventQueueKey(sessionKey: string, agentId?: string)
     throw new Error("system events require a sessionKey");
   }
   const owner = resolveAgentIdFromSessionKey(sessionKey, agentId);
-  if (agentId && owner !== normalizeAgentId(agentId)) {
+  const normalized = agentId?.trim() ? normalizeAgentId(agentId) : undefined;
+  if (
+    normalized &&
+    owner !== normalized &&
+    // Free ACP harness keys name an execution target, not a configured owner
+    // (#146365). An admitted configured owner stays valid while the queue
+    // follows the harness namespace encoded in the key.
+    !isFreeAcpSessionKey(sessionKey)
+  ) {
     throw new Error("System event owner does not match its session key.");
   }
   return toAgentStoreSessionKey({ agentId: owner, requestKey: sessionKey });
