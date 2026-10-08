@@ -143,7 +143,7 @@ export function resolveRequestedSessionAgentId(
   let ownerKey = key;
   if (parsed?.agentId) {
     const keyAgentId = normalizeAgentId(parsed.agentId);
-    const keyRest = parsed.rest.toLowerCase();
+    const keyRest = parsed.rest?.toLowerCase() ?? "";
     // Free ACP harness keys name an execution target, not a configured owner
     // (#146365). A configured requested agent is admitted as owner while the
     // key keeps its harness namespace, so transcript targeting is preserved.
