@@ -227,7 +227,7 @@ it("passes the harness owner to the runtime backend for free ACP keys with an ad
     state: "idle" as const,
     lastActivityAt: 1,
   };
-  await ensureManagerRuntimeHandle({
+  const ensured = await ensureManagerRuntimeHandle({
     cfg,
     sessionKey: "agent:opencode:acp:fixture",
     agentId: "codex",
@@ -242,6 +242,26 @@ it("passes the harness owner to the runtime backend for free ACP keys with an ad
   expect(ensureSession).toHaveBeenCalledOnce();
   // The backend owner gate compares against the key-encoded owner.
   expect(ensureSession.mock.calls[0]?.[0]).toMatchObject({ agentId: "opencode" });
+  // Every later backend call (turn, model, status, close) revalidates the handle.
+  expect(ensured.handle).toMatchObject({ agentId: "opencode" });
+});
+
+it("persists harness-owned runtime handles for free ACP keys with an admitted owner", async () => {
+  const { persistedAcpRuntimeHandle } = await import("./manager.runtime-owner.js");
+  const meta = {
+    backend: "synthetic",
+    agent: "fixture",
+    runtimeSessionName: "synthetic/fixture",
+    mode: "persistent" as const,
+    state: "idle" as const,
+    lastActivityAt: 1,
+  };
+  expect(
+    persistedAcpRuntimeHandle({ sessionKey: "agent:opencode:acp:fixture", agentId: "codex" }, meta),
+  ).toMatchObject({ agentId: "opencode" });
+  expect(
+    persistedAcpRuntimeHandle({ sessionKey: "agent:main:main", agentId: "main" }, meta),
+  ).toMatchObject({ agentId: "main" });
 });
 
 it("retains canonical metadata when an unmigrated backend locator blocks status or reset", async () => {

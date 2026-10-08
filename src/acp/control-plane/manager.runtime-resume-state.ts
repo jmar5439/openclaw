@@ -17,6 +17,7 @@ import type {
   SessionAcpMeta,
   WriteManagerSessionMeta,
 } from "./manager.types.js";
+import { resolveAcpRuntimeAgentId } from "./manager.utils.js";
 
 /** Detects acpx exits that are safe to retry with a fresh runtime handle. */
 export function isRecoverableManagerAcpxExitError(message: string): boolean {
@@ -94,7 +95,7 @@ export async function prepareFreshManagerRuntimeHandleRetry(params: {
       await params.runtime.prepareFreshSession({
         persistedHandle: persistedAcpRuntimeHandle(params, params.meta),
         sessionKey: params.sessionKey,
-        agentId: params.agentId,
+        agentId: resolveAcpRuntimeAgentId(params.sessionKey, params.agentId),
       });
       if (!params.isCurrentActor()) {
         return false;

@@ -323,7 +323,7 @@ export async function ensureManagerRuntimeHandle(params: {
     ...ensured,
     backend: normalizedBackend,
     sessionKey: params.sessionKey,
-    agentId: params.agentId,
+    agentId: runtimeAgentId,
     ...(nextHandleIdentifiers.backendSessionId
       ? { backendSessionId: nextHandleIdentifiers.backendSessionId }
       : {}),

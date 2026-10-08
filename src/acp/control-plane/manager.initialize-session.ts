@@ -103,7 +103,7 @@ export async function runManagerInitializeSession(params: {
     fallbackCode: "ACP_SESSION_INIT_FAILED",
     fallbackMessage: "Could not initialize ACP session runtime.",
   });
-  const handle = { ...ensured, agentId, sessionKey };
+  const handle = { ...ensured, agentId: runtimeAgentId, sessionKey };
   if (!isCurrentActor()) {
     await closeSupersededRuntimeHandle({ runtime, handle, sessionKey });
     throw createSupersededActorError(sessionKey);
