@@ -15,6 +15,7 @@ import {
 import type { InternalSessionEntry, SessionDiffBaseline } from "../config/sessions/types.js";
 import { logVerbose } from "../globals.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import { resolveGlobalMap } from "../shared/global-singleton.js";
 import { getOrCreatePromise } from "../shared/lazy-promise.js";
 
@@ -67,9 +68,19 @@ function loadAuthoritativeGeneration(params: {
   storePath: string;
 }): InternalSessionEntry {
   let entry: InternalSessionEntry | undefined;
+  // Physical reads are keyed by the store owner encoded in the key itself; a
+  // configured owner resolved upstream (#146365) must not replace it here.
+  // Scoped to free ACP harness keys so every other key keeps the caller
+  // behavior exactly.
+  const parsedKey = parseAgentSessionKey(params.sessionKey);
+  const parsedRest = parsedKey?.rest?.toLowerCase() ?? "";
+  const storeAgentId =
+    parsedKey?.agentId && parsedRest.startsWith("acp:") && !parsedRest.startsWith("acp:binding:")
+      ? parsedKey.agentId
+      : params.agentId;
   try {
     entry = loadSessionEntryReadOnly({
-      agentId: params.agentId,
+      agentId: normalizeAgentId(storeAgentId),
       sessionKey: params.sessionKey,
       storePath: params.storePath,
     });
