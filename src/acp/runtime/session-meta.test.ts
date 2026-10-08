@@ -147,6 +147,40 @@ describe("ACP session metadata SQLite store", () => {
     });
   });
 
+  it("writes harness-keyed metadata through an admitted configured owner", async () => {
+    await withTestDir({ prefix: "openclaw-acp-harness-owner-write-" }, async (dir) => {
+      const storePath = path.join(dir, "sessions.json");
+      const databasePath = path.join(dir, "state", "openclaw.sqlite");
+      const cfg = {
+        session: { store: storePath },
+        agents: { ownership: "explicit", entries: { codex: {} } },
+      } satisfies OpenClawConfig;
+      const sessionKey = "agent:opencode:acp:fixture";
+      await replaceSessionEntry(
+        { agentId: "opencode", storePath, sessionKey },
+        { sessionId: "fixture-session", updatedAt: 100 },
+      );
+      const persisted = await upsertAcpSessionMeta({
+        cfg,
+        databasePath,
+        sessionKey,
+        agentId: "codex",
+        mutate: () => ({
+          backend: "acpx",
+          agent: "opencode",
+          runtimeSessionName: "fixture",
+          mode: "persistent",
+          state: "idle",
+          lastActivityAt: 123,
+        }),
+      });
+      expect(persisted?.acp?.runtimeSessionName).toBe("fixture");
+      expect(
+        readAcpSessionMeta({ cfg, databasePath, sessionKey, agentId: "codex" })?.runtimeSessionName,
+      ).toBe("fixture");
+    });
+  });
+
   it.each(["persisted", "sole", "retained"] as const)(
     "batch-loads legacy bare metadata without rekeying during a read (%s owner)",
     async (ownerKind) => {
