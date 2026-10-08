@@ -1,8 +1,8 @@
 // Bridges ACP transcript events into persisted OpenClaw session transcripts.
 import { resolveAcpSessionCwd } from "@openclaw/acp-core/runtime/session-identifiers";
+import { resolveSessionStorePathForAcp } from "../../acp/runtime/session-meta-store.js";
 import type { AgentRunTerminalOutcome } from "../../agents/agent-run-terminal-outcome.js";
 import { persistAcpTurnTranscript } from "../../agents/command/transcript-persistence.js";
-import { resolveSessionStorePathCore } from "../../config/sessions.js";
 import { loadSessionEntryReadOnly } from "../../config/sessions/session-accessor.js";
 import type { PrepareAssistantTranscriptMessage } from "../../config/sessions/transcript-assistant-delivery.js";
 import type { SessionAcpMeta } from "../../config/sessions/types.js";
@@ -30,13 +30,18 @@ export async function persistAcpDispatchTranscript(params: {
     return undefined;
   }
 
-  const sessionAgentId = params.agentId;
-  const storePath = resolveSessionStorePathCore(params.cfg.session?.store, {
-    agentId: sessionAgentId,
+  // Transcript rows live in the harness store on free ACP keys while the
+  // admitted configured owner stays on policy and delivery (#146365).
+  const store = resolveSessionStorePathForAcp({
+    cfg: params.cfg,
+    sessionKey: params.sessionKey,
+    agentId: params.agentId,
   });
+  const sessionAgentId = store.storeAgentId;
+  const storePath = store.storePath;
   const sessionEntry = loadSessionEntryReadOnly({
     agentId: sessionAgentId,
-    sessionKey: params.sessionKey,
+    sessionKey: store.storeSessionKey,
     storePath,
   });
   const sessionId = sessionEntry?.sessionId;
