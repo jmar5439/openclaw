@@ -392,7 +392,12 @@ export function createTelegramDraftStream(params: {
         streamProviderMessage = sent.message;
         streamVisibleSinceMs = Date.now();
       } else if (repositionedSendGenerations.delete(sendGeneration)) {
-        scheduleDetachedDelete(normalizedMessageId, Date.now(), REPOSITION_DELETE_DELAY_MS);
+        scheduleDetachedDelete(
+          normalizedMessageId,
+          Date.now(),
+          REPOSITION_DELETE_DELAY_MS,
+          "validate-failed-late-send",
+        );
       }
       return false;
     }
@@ -407,7 +412,12 @@ export function createTelegramDraftStream(params: {
       if (superseded && replaced) {
         // Repositioned late sends are stale previews; delete instead of retaining
         // them as durable continuation pages.
-        scheduleDetachedDelete(normalizedMessageId, visibleSinceMs, REPOSITION_DELETE_DELAY_MS);
+        scheduleDetachedDelete(
+          normalizedMessageId,
+          visibleSinceMs,
+          REPOSITION_DELETE_DELAY_MS,
+          "repositioned-late-send",
+        );
         return true;
       }
       params.onRetainedPage?.({
@@ -787,7 +797,18 @@ export function createTelegramDraftStream(params: {
     messageId: number,
     visibleSince: number | undefined,
     minDelayMs = 0,
+    source = "unknown",
   ) => {
+    const elapsedMsForLog =
+      typeof visibleSince === "number" ? Date.now() - visibleSince : MIN_PREVIEW_DWELL_MS;
+    const remainingDwellMsForLog = Math.max(0, MIN_PREVIEW_DWELL_MS - elapsedMsForLog);
+    const delayMsForLog = Math.max(remainingDwellMsForLog, minDelayMs);
+    params.log?.(
+      `telegram stream preview delete scheduled (chat=${chatId}, message=${messageId}, ` +
+        `delayMs=${delayMsForLog}, source=${source}, final=${streamState.final}, ` +
+        `delivered=${JSON.stringify(lastDeliveredText.slice(-80))}, ` +
+        `requested=${JSON.stringify(lastRequestedText.slice(-80))})`,
+    );
     const runDelete = async () => {
       try {
         const deleted = await params.api.deleteMessage(chatId, messageId);
@@ -852,7 +873,7 @@ export function createTelegramDraftStream(params: {
       return;
     }
     if (typeof messageId === "number" && Number.isFinite(messageId)) {
-      scheduleDetachedDelete(messageId, visibleSince);
+      scheduleDetachedDelete(messageId, visibleSince, 0, "clear");
     }
     await drainProviderMessageObservations();
   };
@@ -893,6 +914,7 @@ export function createTelegramDraftStream(params: {
         supersededMessageId,
         supersededVisibleSince,
         REPOSITION_DELETE_DELAY_MS,
+        "rotate",
       );
     }
   };
