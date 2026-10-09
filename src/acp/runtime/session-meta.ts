@@ -72,6 +72,7 @@ export function readAcpSessionMetaBatch(params: {
       result.set(item.entry, item.entry.acp);
       continue;
     }
+    const keys = buildAcpDatabaseSessionReadKeys(rawSessionKey, item.agentId);
     const legacyKeys = legacyAcpDatabaseSessionKeys(rawSessionKey, item.agentId, params.cfg);
     const harnessFallbackKey = buildAcpDatabaseSessionHarnessFallbackKey(
       rawSessionKey,

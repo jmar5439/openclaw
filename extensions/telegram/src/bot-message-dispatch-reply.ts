@@ -529,7 +529,27 @@ async function deliverReplyWithNormalization(
     // them onto the turn's answer text (which rotations reset) so consecutive
     // blocks grow the visible bubble instead of replacing it with the last chunk.
     // Snapshot producers (no delta) and multi-segment splits keep today's behavior.
-    let segmentText = turn.lastAnswerPartialText;
+    let segmentText = segment.update.text;
+    if (
+      segment.lane === "answer" &&
+      info.kind === "block" &&
+      split.segments.length === 1 &&
+      typeof payload.delta === "string" &&
+      payload.delta !== "" &&
+      !payload.isReasoning &&
+      !payload.isCommentary
+    ) {
+      // Incremental block: add delta to existing accumulated text
+      const baseText = turn.lastAnswerPartialText ?? "";
+      segmentText = baseText + payload.delta;
+    } else {
+      // Non-incremental block or not answer lane: use the segment text as-is
+      segmentText = segment.update.text;
+    }
+    // Update the accumulated answer text so future increments build on it
+    if (segment.lane === "answer") {
+      turn.lastAnswerPartialText = segmentText;
+    }
     const result =
       segment.lane === "answer" && info.kind === "final"
         ? await deliverFinalAnswerText(
