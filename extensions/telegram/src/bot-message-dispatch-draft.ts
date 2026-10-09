@@ -232,6 +232,36 @@ export function resetLaneState(turn: Turn, lane: DraftLaneState): void {
   }
 }
 
+/**
+ * Teardown cleanup for draft lanes. Lanes carrying a delivered final answer are
+ * stopped first so the stream records final state and teardown retains (not
+ * deletes) the visible answer. Answer text streamed as blocks never gets final
+ * delivery treatment, so without the stop the teardown clear would drop the
+ * delivered answer as an "undelivered" preview. Progress-only previews keep
+ * today's cleanup behavior.
+ */
+export async function clearDraftLanesAtTeardown(
+  turn: Turn,
+  lanes: DraftLaneState[],
+): Promise<void> {
+  for (const lane of lanes) {
+    // Accepted blocks and pagination pages have physical custody independent
+    // of whether this turn's final answer succeeded.
+    if (lane.finalized) {
+      continue;
+    }
+    if (
+      lane.stream &&
+      lane === turn.answerLane &&
+      lane.hasStreamedMessage &&
+      !turn.activeAnswerDraftIsToolProgressOnly
+    ) {
+      await lane.stream.stop().catch(() => undefined);
+    }
+    await lane.stream?.clear();
+  }
+}
+
 export function repositionLaneForNewMessage(turn: Turn, lane: DraftLaneState): void {
   // Reposition instead of delete-then-repost: the replacement must land
   // before deferred cleanup or Telegram can jump and retain a stale preview.
