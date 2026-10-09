@@ -52,7 +52,7 @@ import {
   type ExtractedFileImage,
 } from "../../media-understanding/extracted-file-images.js";
 import { resolveChannelRouteAgentId } from "../../routing/route-binding-index.js";
-import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
+import { isAcpSessionKey, resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { recordAcceptedSessionParticipantInput } from "../../sessions/session-participant-input-recording.js";
 import { prepareChannelParticipantObservation } from "../../sessions/session-participant-input.js";
 import { classifySessionStateActor } from "../../sessions/session-state-events.js";
@@ -318,13 +318,18 @@ export async function tryDispatchAcpReplyCore(params: {
   const transcriptSessionId =
     acpResolution.kind === "ready" ? acpResolution.entry?.sessionId : undefined;
   const acpAgentId = acpResolution.agentId;
-  const participantTarget = {
-    agentId: acpAgentId,
-    sessionKey: canonicalSessionKey,
-    storePath: resolveSessionStorePathCore(params.cfg.session?.store, { agentId: acpAgentId }),
-    onError: (error: unknown) =>
-      logVerbose(`dispatch-acp: participant persistence failed: ${formatErrorMessage(error)}`),
-  };
+  // Skip participant recording for ACP sessions - they don't have session_nodes entries
+  // and would fail FK constraint on session_participants table
+  const isAcpSession = isAcpSessionKey(canonicalSessionKey);
+  const participantTarget = isAcpSession
+    ? null
+    : {
+        agentId: acpAgentId,
+        sessionKey: canonicalSessionKey,
+        storePath: resolveSessionStorePathCore(params.cfg.session?.store, { agentId: acpAgentId }),
+        onError: (error: unknown) =>
+          logVerbose(`dispatch-acp: participant persistence failed: ${formatErrorMessage(error)}`),
+      };
   const progressSessionKeys = isDiagnosticsEnabled(params.cfg)
     ? Array.from(
         new Set(
@@ -437,7 +442,9 @@ export async function tryDispatchAcpReplyCore(params: {
         () => assertPreparedConversationBindingRouteCurrent(params.ctx),
       ))
     ) {
-      recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+      if (participantTarget) {
+        recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+      }
       const counts = params.dispatcher.getQueuedCounts();
       params.recordProcessed("completed", { reason: "acp_question_answer" });
       params.markIdle("message_completed");
@@ -780,7 +787,9 @@ export async function tryDispatchAcpReplyCore(params: {
       evidence: readChannelContextAdmissionEvidence(params.ctx),
       gatewayLocalUserIngress: getGatewayLocalUserIngress(params.ctx),
     }).admit("acp");
-    recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+    if (participantTarget) {
+      recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+    }
     const turnAdmission = admittedRunContext;
     const elicitationParams = {
       sourceSessionKey: sessionKey,
