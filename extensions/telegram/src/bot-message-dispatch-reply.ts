@@ -525,6 +525,11 @@ async function deliverReplyWithNormalization(
       turn.progressCompositor.resetActivity();
     }
     const isAskUserPayload = effectivePayload.channelData?.askUser !== undefined;
+    // Live text blocks carry disjoint chunks, not cumulative snapshots. Accumulate
+    // them onto the turn's answer text (which rotations reset) so consecutive
+    // blocks grow the visible bubble instead of replacing it with the last chunk.
+    // Snapshot producers (no delta) and multi-segment splits keep today's behavior.
+    let segmentText = turn.lastAnswerPartialText;
     const result =
       segment.lane === "answer" && info.kind === "final"
         ? await deliverFinalAnswerText(
@@ -538,7 +543,7 @@ async function deliverReplyWithNormalization(
           )
         : await turn.deliverLaneText({
             laneName: segment.lane,
-            text: segment.update.text,
+            text: segmentText,
             payload: lanePayload,
             infoKind: info.kind,
             buttons: telegramButtons,

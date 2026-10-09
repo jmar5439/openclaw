@@ -17,6 +17,7 @@ import { createTtsDirectiveTextStreamCleaner } from "../../tts/directives.js";
 import { shouldCleanTtsDirectiveText } from "../../tts/tts-config.js";
 import {
   copyReplyPayloadMetadata,
+  getReplyPayloadMetadata,
   isReplyPayloadStatusNotice,
   isReplyPayloadTtsSupplement,
 } from "../reply-payload.js";
@@ -579,12 +580,37 @@ export function createAcpDispatchDeliveryCoordinator(params: AcpDispatchDelivery
           buildCaptionedFinalTextFallback(ttsPayload),
         );
       }
+      // Live text blocks carry disjoint chunks, not cumulative snapshots. Stamp
+      // the visible chunk as a delta so preview consumers append instead of
+      // replacing the bubble (otherwise only the last chunk stays visible).
+      // Transcript, TTS, fallback, and retry bookkeeping keep using `text`.
+      // Merged (coalesced) payloads already carry cumulative text: their
+      // blockSourceRange marks them, so they keep snapshot semantics.
+      const blockDelta =
+        sendKind === "block" &&
+        !deliveredBlock?.delivered &&
+        ttsPayload.text?.trim() &&
+        !ttsPayload.isReasoning &&
+        !ttsPayload.isCommentary &&
+        !ttsPayload.isError &&
+        !ttsPayload.mediaUrl &&
+        !ttsPayload.mediaUrls?.length &&
+        !ttsPayload.presentation &&
+        !ttsPayload.interactive &&
+        !isReplyPayloadStatusNotice(ttsPayload) &&
+        !getReplyPayloadMetadata(ttsPayload)?.blockSourceRange
+          ? ttsPayload.text
+          : undefined;
+      const dispatchPayload =
+        blockDelta !== undefined ? { ...ttsPayload, delta: blockDelta } : ttsPayload;
+      // Keep the delta for the dispatcher; it may be used by channel adapters for accumulation.
+      const dispatcherPayload = ttsPayload;
       const delivered =
         sendKind === "tool"
-          ? params.dispatcher.sendToolResult(ttsPayload)
+          ? params.dispatcher.sendToolResult(dispatcherPayload)
           : sendKind === "block"
-            ? params.dispatcher.sendBlockReply(ttsPayload)
-            : params.dispatcher.sendFinalReply(ttsPayload);
+            ? params.dispatcher.sendBlockReply(dispatcherPayload)
+            : params.dispatcher.sendFinalReply(dispatcherPayload);
       if (sendKind === "block") {
         setBlockReplyDelivery(
           delivered && transcriptOutcome?.isTracked()

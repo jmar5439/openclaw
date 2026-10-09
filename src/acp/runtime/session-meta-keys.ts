@@ -168,6 +168,29 @@ export function resolveLegacyFreeAcpSessionKey(sessionKey: string): string | und
     : undefined;
 }
 
+/**
+ * Read keys for ACP metadata, explicit key first. Free ACP harness rows are
+ * keyed by harness id while callers increasingly resolve a configured owner
+ * (#146365). The harness key is tried as fallback so owner-scoped reads keep
+ * finding existing metadata. Non-harness keys resolve to the single key.
+ */
+export function buildAcpDatabaseSessionReadKeys(
+  storeSessionKey: string,
+  agentId?: string,
+): string[] {
+  const key = normalizeStoreSessionKey(storeSessionKey);
+  const parsed = parseAgentSessionKey(key);
+  const keys = [buildAcpDatabaseSessionKey(key, agentId ?? parsed?.agentId)];
+  const rest = parsed?.rest?.toLowerCase() ?? "";
+  if (parsed?.agentId && rest.startsWith("acp:") && !rest.startsWith("acp:binding:")) {
+    const harnessKey = buildAcpDatabaseSessionKey(key, parsed.agentId);
+    if (!keys.includes(harnessKey)) {
+      keys.push(harnessKey);
+    }
+  }
+  return keys;
+}
+
 export function selectLegacyFreeAcpSessionRows(
   database: DatabaseSync,
   sessionKeys: readonly string[],
@@ -234,13 +257,8 @@ export function selectAcpSessionRowForStoreEntry(
   cfg?: OpenClawConfig,
   entry?: AcpSessionEntryBinding,
 ): AcpSessionRow | undefined {
-  const harnessFallbackKey = buildAcpDatabaseSessionHarnessFallbackKey(storeSessionKey, agentId);
   return selectAcpSessionRowForRead(db, {
-    keys: [
-      buildAcpDatabaseSessionKey(storeSessionKey, agentId),
-      ...(harnessFallbackKey ? [harnessFallbackKey] : []),
-      ...legacyAcpDatabaseSessionKeys(storeSessionKey, agentId, cfg),
-    ],
+    keys: buildAcpDatabaseSessionReadKeys(storeSessionKey, agentId),
     legacyKey: resolveLegacyFreeAcpSessionKey(storeSessionKey),
     entry,
   });

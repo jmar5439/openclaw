@@ -30,6 +30,13 @@ export type ReplyPayloadTtsSupplement = {
 /** Channel-agnostic assistant reply payload. */
 export type ReplyPayload = {
   text?: string;
+  /**
+   * Incremental chunk extending previously dispatched visible text. Preview
+   * consumers append it to the last visible text instead of replacing the
+   * bubble content. Transcript, TTS, and fallback consumers must keep using
+   * `text`. Absent means `text` is a complete snapshot (replace semantics).
+   */
+  delta?: string;
   /** Visible body a channel adapter may use when native structured content requires text. */
   fallbackText?: {
     text: string;

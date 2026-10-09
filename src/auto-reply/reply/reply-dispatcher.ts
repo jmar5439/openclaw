@@ -417,8 +417,20 @@ export function createReplyDispatcher(
           await notifyBeforeDeliverCancelled(payload, info);
           throw error;
         }
-        deliveryInput = deliverPayload
-          ? replaceDispatchPayload(input, copyReplyPayloadMetadata(payload, deliverPayload))
+        // A hook rewrite breaks the delta chain: the replacement text is a new
+        // snapshot, not a continuation of previously dispatched visible text.
+        // Drop a stale delta so preview consumers replace instead of appending.
+        const continuedPayload =
+          deliverPayload &&
+          deliverPayload.delta !== undefined &&
+          deliverPayload.text !== payload.text
+            ? ((): ReplyPayload => {
+                const { delta: _droppedDelta, ...rest } = deliverPayload;
+                return rest;
+              })()
+            : deliverPayload;
+        deliveryInput = continuedPayload
+          ? replaceDispatchPayload(input, copyReplyPayloadMetadata(payload, continuedPayload))
           : null;
         if (!deliveryInput) {
           // Record the intentional non-delivery before observers run so a
