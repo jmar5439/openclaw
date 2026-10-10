@@ -298,6 +298,31 @@ export async function deliverReply(
   return deliverReplyWithNormalization(turn, payload, info, normalizeDeliveryPayload);
 }
 
+/**
+ * Resolves the full visible text for one incremental answer block.
+ *
+ * Producer contract (`embedded-agent-live.runtime.ts`, acpx harness): `text`
+ * carries the cumulative snapshot while `delta` carries only the disjoint new
+ * chunk (`text.slice(previous.length)`). Either side can go stale across lane
+ * rotations, so the snapshot wins whenever it already contains the base;
+ * otherwise the delta is appended. Snapshot producers (no delta) and
+ * `replace` updates always use the snapshot as-is.
+ */
+export function resolveIncrementalBlockText(params: {
+  baseText: string;
+  snapshotText: string;
+  delta?: string;
+  replace?: true;
+}): string {
+  if (params.replace || params.delta === undefined || params.delta === "") {
+    return params.snapshotText;
+  }
+  if (params.snapshotText.startsWith(params.baseText)) {
+    return params.snapshotText;
+  }
+  return `${params.baseText}${params.delta}`;
+}
+
 export async function deliverPreparedReply(
   turn: Turn,
   plan: OutboundPayloadPlan,
@@ -525,26 +550,25 @@ async function deliverReplyWithNormalization(
       turn.progressCompositor.resetActivity();
     }
     const isAskUserPayload = effectivePayload.channelData?.askUser !== undefined;
-    // Live text blocks carry disjoint chunks, not cumulative snapshots. Accumulate
-    // them onto the turn's answer text (which rotations reset) so consecutive
-    // blocks grow the visible bubble instead of replacing it with the last chunk.
-    // Snapshot producers (no delta) and multi-segment splits keep today's behavior.
+    // Live text blocks carry the cumulative snapshot in `text` plus the disjoint
+    // chunk in `delta`. The snapshot wins whenever it already contains the
+    // accumulated base (including after lane rotations reset the base); the
+    // delta is appended only for genuinely disjoint producers. Snapshot
+    // producers (no delta) and multi-segment splits keep today's behavior.
+    const baseText = turn.lastAnswerPartialText ?? "";
     let segmentText = segment.update.text;
     if (
       segment.lane === "answer" &&
       info.kind === "block" &&
       split.segments.length === 1 &&
-      typeof payload.delta === "string" &&
-      payload.delta !== "" &&
       !payload.isReasoning &&
       !payload.isCommentary
     ) {
-      // Incremental block: add delta to existing accumulated text
-      const baseText = turn.lastAnswerPartialText ?? "";
-      segmentText = baseText + payload.delta;
-    } else {
-      // Non-incremental block or not answer lane: use the segment text as-is
-      segmentText = segment.update.text;
+      segmentText = resolveIncrementalBlockText({
+        baseText,
+        snapshotText: segment.update.text,
+        delta: payload.delta,
+      });
     }
     // Update the accumulated answer text so future increments build on it
     if (segment.lane === "answer") {
@@ -555,7 +579,7 @@ async function deliverReplyWithNormalization(
         ? await deliverFinalAnswerText(
             turn,
             effectivePayload,
-            segment.update.text,
+            segmentText,
             telegramButtons,
             info.onPlatformSendDispatch,
             info.assertPlatformSendAuthorized,
@@ -589,7 +613,7 @@ async function deliverReplyWithNormalization(
     if (segment.lane === "answer" && info.kind === "block" && result.kind === "preview-updated") {
       turn.activeAnswerBlockDelivery = {
         payload: lanePayload,
-        text: segment.update.text,
+        text: segmentText,
         buttons: telegramButtons,
       };
     }
