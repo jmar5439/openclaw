@@ -139,6 +139,14 @@ Commands and implementation detail stay with these owners.
 - **Codex-backed behavior:** personally inspect the exact sibling `../codex` source before implementation or verdict and cite it; wrappers, schemas, and another agent's report do not replace this check. Auth/runtime/catalog routes use `openai`; legacy `openai-codex` input belongs only in migration. Harness upgrades refresh [the harness guide](docs/plugins/codex-harness.md) from `model/list`.
 - **Validation commands:** [test suites](docs/help/testing/suites.md) is a command reference; this file and the chosen workflow own check selection. Test authoring also uses [writing tests](docs/help/testing/writing-tests.md) and the owning scoped guide.
 - **GitHub:** [contribution rules](CONTRIBUTING.md), the current PR template, and [review feedback](docs/reference/pull-request-review-flow.md). The authorized maintainer workflow owns landing; native `scripts/pr` gates, recovery, and cleanup require [scripts guide](scripts/AGENTS.md).
+- **Useful GitHub Workflow Commands:**
+  - Compilar una rama sin tocarla ni desplegar:
+    `gh workflow run build-fork --repo jmar5439/openclaw --ref ci/build-fork --field ref=<branch-name>`
+  - Desplegar a prod (PEDIR APROBACIÓN ANTES, es directo a prod):
+    `gh workflow run build-fork --repo jmar5439/openclaw --ref ci/build-fork --field ref=<branch-name> --field deploy=true`
+  - Deploy (solo si dispatch con `deploy=true`): descarga artefacto, scp a
+    `/tmp/openclaw-fork.tgz`, `npm i -g`, restart gateway, verifica
+    `openclaw --version` = sufijo, comprueba `~/.openclaw/extensions` y servicio
 - **Docs/public links:** [docs guide](docs/AGENTS.md). Update docs with behavior; normal fix notes belong in PRs because `CHANGELOG.md` is release-owned.
 - **Releases:** the chosen release workflow and [release contract](docs/reference/RELEASING.md). Preserve the selected release cut and identity through publication and verification. npm-format lock mirrors are verified against `pnpm-lock.yaml`, published in dependency evidence, and kept out of npm tarballs.
 - **Secrets/advisories:** [secret semantics](docs/gateway/secrets.md), [auth semantics](docs/auth-credential-semantics.md), and [security reporting](SECURITY.md) for the affected branch.
