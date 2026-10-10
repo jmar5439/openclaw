@@ -147,6 +147,13 @@ Commands and implementation detail stay with these owners.
   - Deploy (solo si dispatch con `deploy=true`): descarga artefacto, scp a
     `/tmp/openclaw-fork.tgz`, `npm i -g`, restart gateway, verifica
     `openclaw --version` = sufijo, comprueba `~/.openclaw/extensions` y servicio
+  - NO descargar el artefacto con `gh run download` en el host del gateway:
+    el disco va justo y una descarga + install ya provocó ENOSPC (rompió el
+    binario `openclaw`). Con `deploy=true` el propio workflow deja el tgz en
+    `/tmp/openclaw-fork.tgz`; instalar desde ahí (`npm i -g
+/tmp/openclaw-fork.tgz`). Antes de instalar, comprobar `df -h /` y si
+    hace falta liberar con `npm cache clean --force`; no borrar backups ni
+    datos de usuario.
 - **Docs/public links:** [docs guide](docs/AGENTS.md). Update docs with behavior; normal fix notes belong in PRs because `CHANGELOG.md` is release-owned.
 - **Releases:** the chosen release workflow and [release contract](docs/reference/RELEASING.md). Preserve the selected release cut and identity through publication and verification. npm-format lock mirrors are verified against `pnpm-lock.yaml`, published in dependency evidence, and kept out of npm tarballs.
 - **Secrets/advisories:** [secret semantics](docs/gateway/secrets.md), [auth semantics](docs/auth-credential-semantics.md), and [security reporting](SECURITY.md) for the affected branch.
