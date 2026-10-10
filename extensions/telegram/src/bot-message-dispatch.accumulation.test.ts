@@ -1,7 +1,9 @@
 // Regression: streamed answer blocks must accumulate instead of overwriting.
 // Producer contract: `text` carries the cumulative snapshot, `delta` the
 // disjoint new chunk. Either side can go stale across lane rotations, so the
-// snapshot wins whenever it already contains the base.
+// snapshot wins whenever it already contains the base. A disjoint chunk with
+// no delta is appended when the base is non-empty (the base is cleared on
+// every lane reset, so it always means already-visible content).
 import { describe, expect, it } from "vitest";
 import { resolveIncrementalBlockText } from "./bot-message-dispatch-reply.js";
 
@@ -47,13 +49,35 @@ describe("resolveIncrementalBlockText", () => {
     ).toBe(preamble);
   });
 
-  it("uses the snapshot as-is without a delta", () => {
+  it("appends a disjoint chunk that carries no delta", () => {
+    // ACP production case: disjoint chunks arrive with only `text` set.
+    // The base is cleared by resetLaneState on every rotation, so a non-empty
+    // base the snapshot does not extend means content already visible in the
+    // current bubble; replacing would flash only the latest chunk.
     expect(
       resolveIncrementalBlockText({
-        baseText: "stale base",
+        baseText: "Hello ",
+        snapshotText: "world",
+      }),
+    ).toBe("Hello world");
+  });
+
+  it("uses the snapshot as-is without a delta or accumulated base", () => {
+    expect(
+      resolveIncrementalBlockText({
+        baseText: "",
         snapshotText: "full cumulative text",
       }),
     ).toBe("full cumulative text");
+  });
+
+  it("keeps a cumulative snapshot that carries no delta", () => {
+    expect(
+      resolveIncrementalBlockText({
+        baseText: "Hello ",
+        snapshotText: "Hello world",
+      }),
+    ).toBe("Hello world");
   });
 
   it("uses the snapshot as-is for replace updates", () => {

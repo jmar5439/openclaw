@@ -304,9 +304,13 @@ export async function deliverReply(
  * Producer contract (`embedded-agent-live.runtime.ts`, acpx harness): `text`
  * carries the cumulative snapshot while `delta` carries only the disjoint new
  * chunk (`text.slice(previous.length)`). Either side can go stale across lane
- * rotations, so the snapshot wins whenever it already contains the base;
- * otherwise the delta is appended. Snapshot producers (no delta) and
- * `replace` updates always use the snapshot as-is.
+ * rotations, so the snapshot wins whenever it already contains the base.
+ * A disjoint chunk producer that sends no delta (only `text`) is detected by
+ * a non-empty base the snapshot does not extend; the chunk is appended so the
+ * bubble keeps cumulative text instead of flashing only the latest chunk.
+ * `replace` updates and producers with no accumulated base keep snapshot
+ * semantics. The base is cleared by `resetLaneState`, so a non-empty base
+ * always means content already shown in the current bubble.
  */
 export function resolveIncrementalBlockText(params: {
   baseText: string;
@@ -314,13 +318,19 @@ export function resolveIncrementalBlockText(params: {
   delta?: string;
   replace?: true;
 }): string {
-  if (params.replace || params.delta === undefined || params.delta === "") {
+  if (params.replace || params.delta === "") {
     return params.snapshotText;
   }
-  if (params.snapshotText.startsWith(params.baseText)) {
-    return params.snapshotText;
+  if (params.delta !== undefined) {
+    if (params.snapshotText.startsWith(params.baseText)) {
+      return params.snapshotText;
+    }
+    return `${params.baseText}${params.delta}`;
   }
-  return `${params.baseText}${params.delta}`;
+  if (params.baseText !== "" && !params.snapshotText.startsWith(params.baseText)) {
+    return `${params.baseText}${params.snapshotText}`;
+  }
+  return params.snapshotText;
 }
 
 export async function deliverPreparedReply(
@@ -553,25 +563,28 @@ async function deliverReplyWithNormalization(
     // Live text blocks carry the cumulative snapshot in `text` plus the disjoint
     // chunk in `delta`. The snapshot wins whenever it already contains the
     // accumulated base (including after lane rotations reset the base); the
-    // delta is appended only for genuinely disjoint producers. Snapshot
-    // producers (no delta) and multi-segment splits keep today's behavior.
+    // delta is appended only for genuinely disjoint producers. A producer that
+    // sends disjoint chunks with no delta is detected by a non-empty base the
+    // snapshot does not extend, and the chunk is appended. Media captions,
+    // error/notice payloads, and multi-segment splits keep today's behavior,
+    // and only accumulation participants move the base forward so they can
+    // never corrupt it.
     const baseText = turn.lastAnswerPartialText ?? "";
     let segmentText = segment.update.text;
-    if (
+    const canAccumulateBlock =
       segment.lane === "answer" &&
-      info.kind === "block" &&
+      (info.kind === "block" || info.kind === "final") &&
       split.segments.length === 1 &&
       !payload.isReasoning &&
-      !payload.isCommentary
-    ) {
+      !payload.isCommentary &&
+      !reply.hasMedia &&
+      payload.isError !== true;
+    if (canAccumulateBlock) {
       segmentText = resolveIncrementalBlockText({
         baseText,
         snapshotText: segment.update.text,
         delta: payload.delta,
       });
-    }
-    // Update the accumulated answer text so future increments build on it
-    if (segment.lane === "answer") {
       turn.lastAnswerPartialText = segmentText;
     }
     const result =
