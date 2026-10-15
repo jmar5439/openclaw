@@ -250,6 +250,20 @@ export type RunEmbeddedAgentParams = {
   streamReasoningInNonStreamModes?: boolean;
   onReasoningEnd?: () => void | Promise<void>;
   onToolResult?: (payload: ReplyPayload) => void | Promise<void>;
+  /**
+   * Called when an externally-executed tool phase starts/updates (e.g. ACP
+   * `tool_call`/`tool_call_update`), before summary payloads are emitted.
+   * Mirrors `GetReplyOptions.onToolStart`. Harnesses that own tool execution
+   * report through dispatch opts instead and never set this.
+   */
+  onToolStart?: (payload: {
+    itemId?: string;
+    toolCallId?: string;
+    name?: string;
+    phase?: string;
+    args?: Record<string, unknown>;
+    detailMode?: "explain" | "raw";
+  }) => void | Promise<void>;
   /** Synchronous private observer for the sanitized per-tool result. */
   onAgentToolResult?: (event: { toolName: string; result: unknown; isError: boolean }) => void;
   /** Reports a committed generic recovery compaction before its retry starts. */

@@ -22,6 +22,35 @@ import { appendSessionTranscriptMessageByIdentityStrict } from "openclaw/plugin-
 import type { AcpRuntimeHandle, AcpRuntimeTurnInput } from "../runtime-api.js";
 import type { CompleteAcpRuntime } from "./runtime-proxy.js";
 
+export type AcpToolCallProgress = {
+  toolCallId?: string;
+  name: string;
+  phase: "start" | "update";
+};
+
+/**
+ * Maps an ACP `tool_call` stream event onto a tool-start notification for
+ * channel progress renderers. A `tool_call` (or untagged) event opens the
+ * indicator; `tool_call_update` refreshes it. Terminal statuses stay on the
+ * result path and resolve to undefined.
+ */
+export function resolveAcpToolCallProgress(event: {
+  tag?: string;
+  status?: string;
+  title?: string;
+  kind?: string;
+  toolCallId?: string;
+}): AcpToolCallProgress | undefined {
+  if (event.status && /^(completed?|failed?|errors?|cancelled?)$/i.test(event.status.trim())) {
+    return undefined;
+  }
+  return {
+    ...(event.toolCallId ? { toolCallId: event.toolCallId } : {}),
+    name: event.title?.trim() || event.kind?.trim() || "tool",
+    phase: event.tag === "tool_call_update" ? "update" : "start",
+  };
+}
+
 export async function runAcpHarnessAttempt(params: {
   input: AgentHarnessAttemptParamsV2;
   runtime: CompleteAcpRuntime;
@@ -321,6 +350,10 @@ export async function runAcpHarnessAttempt(params: {
             Object.assign(existing, metadata);
           } else {
             toolMetas.push(metadata);
+          }
+          const progress = resolveAcpToolCallProgress(event);
+          if (progress) {
+            await input.onToolStart?.(progress);
           }
           await input.onToolResult?.({ text: event.text });
         }
