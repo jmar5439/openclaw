@@ -27,23 +27,6 @@ export type AcpSessionStoreEntry = {
   storeReadFailed?: boolean;
 };
 
-/** Join the logical ACP key to its canonical SQLite entry without renaming ACP metadata. */
-function resolveStoreEntryForSessionKey(params: {
-  agentId?: string;
-  storePath: string;
-  sessionKey: string;
-  clone?: boolean;
-}): { storeSessionKey: string; entry?: SessionEntry } {
-  const storeSessionKey = normalizeStoreSessionKey(params.sessionKey);
-  if (!storeSessionKey) {
-    return { storeSessionKey };
-  }
-  return {
-    storeSessionKey,
-    entry: loadSessionEntryReadOnly({ ...params, sessionKey: storeSessionKey }),
-  };
-}
-
 /** Resolves the session store path that owns an ACP session key. */
 export function resolveSessionStorePathForAcp(params: {
   sessionKey: string;
@@ -169,12 +152,7 @@ export function readSessionEntryFromStore(params: {
     storeAgentId,
     storePath,
     storeSessionKey: canonicalKey,
-  } = resolveSessionStorePathForAcp({
-    sessionKey: params.sessionKey,
-    agentId: params.agentId,
-    cfg: params.cfg,
-    env: params.env,
-  });
+  } = resolveSessionStorePathForAcp(params);
   try {
     const { storeSessionKey, entry } = resolveStoreEntryForSessionKey({
       ...(storeAgentId ? { agentId: storeAgentId } : {}),
