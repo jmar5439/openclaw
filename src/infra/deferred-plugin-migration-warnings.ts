@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 /**
  * Select deferred plugin migration warnings that no longer describe current state:
  * the plugin's obligation left the pending ledger, or a later warning for the same
@@ -11,13 +10,6 @@ export async function readRetiredDeferredPluginMigrationWarnings(
 ): Promise<ReadonlySet<string>> {
   const pluginWarnings = new Map<string, string>();
   const latestByPlugin = new Map<string, string>();
-=======
-/** Match both shipped warning forms without reading retired migration reports. */
-export async function readResolvedDeferredPluginMigrationWarnings(
-  messages: readonly (string | undefined)[],
-): Promise<ReadonlyMap<string, number>> {
-  const pluginWarnings = new Map<string, string>();
->>>>>>> test/all-fixes-2026.9.8
   for (const message of messages) {
     const pluginId =
       message &&
@@ -26,7 +18,6 @@ export async function readResolvedDeferredPluginMigrationWarnings(
       )?.[1];
     if (message && pluginId) {
       pluginWarnings.set(message, pluginId);
-<<<<<<< HEAD
       latestByPlugin.set(pluginId, message);
     }
   }
@@ -58,27 +49,4 @@ export async function retainCurrentDeferredPluginMigrationWarnings(
     () => new Set<string>(),
   );
   return warnings.filter((warning) => !retired.has(warning));
-=======
-    }
-  }
-  if (!pluginWarnings.size) {
-    return new Map();
-  }
-  const { readDeferredPluginMigrationCompletionsAsync } =
-    await import("./deferred-plugin-migrations.js");
-  const completions = new Map(
-    (await readDeferredPluginMigrationCompletionsAsync()).map(({ pluginId, completedAtMs }) => [
-      pluginId,
-      completedAtMs,
-    ]),
-  );
-  const resolved = new Map<string, number>();
-  for (const [message, pluginId] of pluginWarnings) {
-    const completedAtMs = completions.get(pluginId);
-    if (completedAtMs !== undefined) {
-      resolved.set(message, completedAtMs);
-    }
-  }
-  return resolved;
->>>>>>> test/all-fixes-2026.9.8
 }
