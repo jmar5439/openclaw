@@ -200,7 +200,7 @@ function agentParams(call: { params?: unknown }): AgentCallParams {
 }
 
 describe("sessions tools", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     resetGatewayWorkAdmission();
     callGatewayMock.mockClear();
     embeddedRunsTesting.resetActiveEmbeddedRuns();

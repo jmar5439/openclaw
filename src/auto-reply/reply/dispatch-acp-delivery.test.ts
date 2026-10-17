@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { raceWithTimeoutResult } from "../../../test/helpers/promise.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { PlatformMessageNotDispatchedError } from "../../infra/outbound/deliver-types.js";
+import { setReplyPayloadMetadata } from "../reply-payload.js";
 import { createAcpDispatchDeliveryCoordinator } from "./dispatch-acp-delivery.js";
 import { createReplyDispatcher } from "./reply-dispatcher.js";
 import type { ReplyDispatcher } from "./reply-dispatcher.types.js";
@@ -436,12 +437,65 @@ describe("createAcpDispatchDeliveryCoordinator", () => {
       { skipTts: true },
     );
 
-    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(1, { text: "Intro " });
-    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(2, { text: " visible" });
+    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(1, {
+      text: "Intro ",
+    });
+    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(2, {
+      text: " visible",
+    });
     expect(coordinator.getAccumulatedVisibleBlockText()).toBe("Intro  visible");
     expect(coordinator.getAccumulatedBlockTtsText()).toBe(
       "Intro [[tts:text]]hidden[[/tts:text]] visible",
     );
+  });
+
+  it("stamps live text chunks as deltas and keeps snapshots for the rest", async () => {
+    const dispatcher = createDispatcher();
+    const coordinator = createCoordinator({ dispatcher });
+
+    await coordinator.deliver("block", { text: "chunk-one " }, { skipTts: true });
+    await coordinator.deliver("block", { text: "chunk-two" }, { skipTts: true });
+    await coordinator.deliver("final", { text: "done" }, { skipTts: true });
+    await coordinator.deliver("tool", { text: "tool status" }, { skipTts: true });
+
+    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(1, {
+      text: "chunk-one ",
+    });
+    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(2, {
+      text: "chunk-two",
+    });
+    // Finals keep snapshot semantics: no delta, replace in place.
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({ text: "done" });
+  });
+
+  it("does not stamp deltas on merged, reasoning, or media blocks", async () => {
+    const dispatcher = createDispatcher();
+    const coordinator = createCoordinator({ dispatcher });
+    const merged = setReplyPayloadMetadata(
+      { text: "merged whole" },
+      {
+        blockSourceText: "merged whole",
+        blockSourceRange: [0, 12] as const,
+      },
+    );
+
+    await coordinator.deliver("block", merged, { skipTts: true });
+    await coordinator.deliver("block", { text: "thinking", isReasoning: true }, { skipTts: true });
+    await coordinator.deliver(
+      "block",
+      { text: "caption", mediaUrl: "https://example.invalid/x.png" },
+      { skipTts: true },
+    );
+
+    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(1, { text: "merged whole" });
+    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(2, {
+      text: "thinking",
+      isReasoning: true,
+    });
+    expect(dispatcher.sendBlockReply).toHaveBeenNthCalledWith(3, {
+      text: "caption",
+      mediaUrl: "https://example.invalid/x.png",
+    });
   });
 
   it("keeps status notices out of ACP block TTS accumulation", async () => {

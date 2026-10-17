@@ -131,7 +131,9 @@ async function startProvider() {
   };
 }
 
-describe("heartbeat notification store ownership through the Gateway", () => {
+const serialSuite = { concurrent: false } as const;
+
+describe("heartbeat notification store ownership through the Gateway", serialSuite, () => {
   it.each(["different store", "same-store replacement"] as const)(
     "handles a queued child notice after %s",
     async (transition) => {

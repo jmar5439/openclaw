@@ -32,6 +32,8 @@ import {
 import { claimPreparedPendingAgentQuestionAnswer } from "../../agents/harness/gateway-question.js";
 import { toolPolicyRestrictsTools } from "../../agents/tool-policy.js";
 import { recordRuntimeActionDecision } from "../../audit/runtime-action-decision.js";
+import type { ChatType } from "../../channels/chat-type.js";
+import { resolveConversationBindingRouteOwnerAgentId } from "../../channels/conversation-binding-route-facts.js";
 import { readChannelContextAdmissionEvidence } from "../../channels/message-access/admission-evidence.js";
 import { resolveSessionStorePathCore } from "../../config/sessions/paths.js";
 import type { PrepareAssistantTranscriptMessage } from "../../config/sessions/transcript-assistant-delivery.js";
@@ -47,7 +49,8 @@ import {
   stripExtractedFileImageMetadata,
   type ExtractedFileImage,
 } from "../../media-understanding/extracted-file-images.js";
-import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
+import { resolveChannelRouteAgentId } from "../../routing/route-binding-index.js";
+import { isAcpSessionKey, resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { recordAcceptedSessionParticipantInput } from "../../sessions/session-participant-input-recording.js";
 import { prepareChannelParticipantObservation } from "../../sessions/session-participant-input.js";
 import { classifySessionStateActor } from "../../sessions/session-state-events.js";
@@ -199,7 +202,14 @@ export async function tryDispatchAcpReplyCore(
     agentId: resolveSessionAgentId({
       config: params.cfg,
       sessionKey,
-      fallbackAgentId: params.ctx.AgentId,
+      // Bound free-ACP sessions carry the configured channel owner on the
+      // route; without it a multi-agent fleet cannot select an owner (#146365).
+      // Unbound sessions fall back to the channel account's configured agent.
+      fallbackAgentId:
+        normalizeOptionalString(params.ctx.RouteOwnerAgentId) ??
+        resolveConversationBindingRouteOwnerAgentId(params.ctx, sessionKey) ??
+        params.ctx.AgentId ??
+        resolveChannelRouteAgentId(params.cfg, params.ctx.OriginatingChannel, params.ctx.AccountId),
     }),
     assertCurrent: assertInputCurrent,
   });
@@ -211,13 +221,18 @@ export async function tryDispatchAcpReplyCore(
   const transcriptSessionId =
     acpResolution.kind === "ready" ? acpResolution.entry?.sessionId : undefined;
   const acpAgentId = acpResolution.agentId;
-  const participantTarget = {
-    agentId: acpAgentId,
-    sessionKey: canonicalSessionKey,
-    storePath: resolveSessionStorePathCore(params.cfg.session?.store, { agentId: acpAgentId }),
-    onError: (error: unknown) =>
-      logVerbose(`dispatch-acp: participant persistence failed: ${formatErrorMessage(error)}`),
-  };
+  // Skip participant recording for ACP sessions - they don't have session_nodes entries
+  // and would fail FK constraint on session_participants table
+  const isAcpSession = isAcpSessionKey(canonicalSessionKey);
+  const participantTarget = isAcpSession
+    ? null
+    : {
+        agentId: acpAgentId,
+        sessionKey: canonicalSessionKey,
+        storePath: resolveSessionStorePathCore(params.cfg.session?.store, { agentId: acpAgentId }),
+        onError: (error: unknown) =>
+          logVerbose(`dispatch-acp: participant persistence failed: ${formatErrorMessage(error)}`),
+      };
   const progressSessionKeys = isDiagnosticsEnabled(params.cfg)
     ? normalizeUniqueTrimmedStringList([params.ctx.SessionKey, sessionKey, canonicalSessionKey])
     : [];
@@ -324,7 +339,9 @@ export async function tryDispatchAcpReplyCore(
         () => assertPreparedConversationBindingRouteCurrent(params.ctx),
       ))
     ) {
-      recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+      if (participantTarget) {
+        recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+      }
       const counts = params.dispatcher.getQueuedCounts();
       params.recordProcessed("completed", { reason: "acp_question_answer" });
       params.markIdle("message_completed");
@@ -672,7 +689,9 @@ export async function tryDispatchAcpReplyCore(
       evidence: readChannelContextAdmissionEvidence(params.ctx),
       gatewayLocalUserIngress: getGatewayLocalUserIngress(params.ctx),
     }).admit("acp");
-    recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+    if (participantTarget) {
+      recordAcceptedSessionParticipantInput(params.ctx, participantTarget);
+    }
     const turnAdmission = admittedRunContext;
     const elicitationParams = {
       sourceSessionKey: sessionKey,

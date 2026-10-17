@@ -37,7 +37,10 @@ type Scenario = {
   invocation?: "cli" | "flow" | "package";
   finished?: boolean;
   update?: boolean;
+<<<<<<< HEAD
   publicationOnly?: boolean;
+=======
+>>>>>>> test/all-fixes-2026.9.8
   databaseKind?: "state" | "agent";
 };
 
@@ -124,10 +127,14 @@ async function inspectDoctor(scenario: Scenario) {
       } else {
         result =
           scenario.invocation === "flow"
+<<<<<<< HEAD
             ? await guardUpdateDoctorSchemaUpgrade({
                 schemas,
                 statePublicationOnly: scenario.publicationOnly,
               })
+=======
+            ? await guardUpdateDoctorSchemaUpgrade({ schemas })
+>>>>>>> test/all-fixes-2026.9.8
             : await preflightUpdateDoctorCli({});
       }
     } catch (caught) {
@@ -144,7 +151,10 @@ async function inspectDoctor(scenario: Scenario) {
 }
 
 const refusalScenarios: (Scenario & { name: string })[] = [
+<<<<<<< HEAD
   { name: "publication-only pre-capture inspection", invocation: "flow", publicationOnly: true },
+=======
+>>>>>>> test/all-fixes-2026.9.8
   { name: "package lifecycle before repair", invocation: "package" },
   { name: "live driver", liveness: "alive" },
   { name: "unobservable driver", liveness: "unknown" },

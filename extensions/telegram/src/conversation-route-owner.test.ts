@@ -97,6 +97,30 @@ describe("inspectTelegramConversationRouteOwner", () => {
     }
   });
 
+  it("uses the configured channel owner for free ACP session bindings", () => {
+    registerSessionBindingAdapter({
+      channel: "telegram",
+      accountId: "default",
+      listBySession: () => [],
+      resolveByConversation: (conversation) => ({
+        bindingId: "binding-acp",
+        targetSessionKey: "agent:opencode:acp:session-1",
+        targetKind: "session",
+        conversation,
+        status: "active",
+        boundAt: 1,
+      }),
+    });
+
+    expect(
+      inspectTelegramConversationRouteOwner({
+        cfg: { channels: { telegram: { accounts: { default: {} } } } },
+        accountId: "default",
+        conversation: { kind: "direct", peerId: "467924992" },
+      }),
+    ).toEqual({ kind: "agent", agentId: "main" });
+  });
+
   it.each([
     "unchanged",
     "reassigned",

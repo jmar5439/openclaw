@@ -89,7 +89,6 @@ For selected official npm plugins, Full Release Validation packs and qualifies
 the exact tarballs intended for publication and records their immutable artifact
 descriptors. Publication consumes those same bytes. Unpacked source fixtures do
 not participate unless npm includes them in a shipped tarball.
-
 Dependency advisories never block or delay a release. Release dependency
 evidence records every advisory finding, at any severity, and CI dispatched by
 release validation or publication reports a failing dependency audit as a
@@ -111,14 +110,10 @@ New candidate qualification records three separate identities:
 - **Q — qualification:** the full workflow closure at C, including reusable workflows,
   local actions, scripts, planners, contracts, and coverage data. By default **Q=C**.
 - **P — admission, verification, and publication tooling:** an independently trusted
-  main revision or protected publication tag. P may differ from C/Q; C/Q does not
   need to be an ancestor of P. Trust in P does not replace qualification of C.
 
 The canonical SHA-pinned helper first asks P to record the reviewed operator
 attestation, complete normalized inputs, and data-only frozen Q coverage in an
-immutable admission artifact. Only then does that same helper dispatch Full
-Release Validation from an immutable `release-ci/*` ref at Q. A publication
-`release-publish/*` tag belongs to P, never to Q merely to make validation run.
 Admission is not a successful test result or publication approval.
 
 A candidate missing the required qualification contracts needs a deliberate

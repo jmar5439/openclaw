@@ -98,8 +98,7 @@ reference for commands rather than redispatching the release parent.
 
 - confirmed product defect that a required lane blocks on (update/install
   path, publish bytes, or another required gate proven by diagnosis): fix the
-  release branch, freeze a new Code SHA, and invalidate downstream product
-  evidence
+  release branch, freeze a new Code SHA, and invalidate downstream product evidence
 - selected test failure: record the lead's real-blocker-or-flake decision and
   its evidence. An untouched test or passing replay alone does not prove a
   flake or a fix. A flake gets at most two recorded reruns on the same Release

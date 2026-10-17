@@ -27,7 +27,6 @@ and profile state, and Microsoft Teams conversations, polls, SSO tokens, and
 feedback learnings are no longer imported from JSON files. If those sources
 remain, Doctor preserves them and directs you to [upgrade through `2026.9.5`](/install/updating#upgrading-very-old-versions)
 and run its migrations first. Existing SQLite state remains authoritative.
-
 Pre-July Telegram bot-info, sticker, thread-binding, update-offset, message,
 sent-message, and topic-name JSON sidecars are no longer inspected or archived.
 Doctor leaves their files untouched, including empty thread-binding files. If
@@ -35,7 +34,6 @@ you still need their state, restore a complete pre-update backup and run
 `openclaw doctor --fix` on OpenClaw `2026.9.5` before updating again. The separate
 Telegram JSON ingress-spool migration still imports pending updates, processing
 claims, and failed tombstones with verified backups.
-
 Retired `subagents/runs.json` files are also ignored and left untouched;
 transient runs are never restored from them.
 

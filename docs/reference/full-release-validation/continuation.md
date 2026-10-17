@@ -64,7 +64,6 @@ exact receipt job instead of rerunning the passing workloads. It carries forward
 their accepted attempts, seals the new receipt against the exact child attempt,
 and still requires `continue --failed` plus strict verification before reporting
 qualification accepted. A metadata retry starting is not qualification success.
-
 `continue --failed` reruns each failed child's jobs as soon as that child is
 terminal, while sibling children and the original parent may still run. It
 adopts active attempts without duplicating them and leaves green child
@@ -149,6 +148,42 @@ Q requires its reviewed candidate context and frozen qualification contracts.
 Missing contracts require deliberate candidate backports, never newer-tooling
 substitution. Existing historical requests retain their original identities.
 The workflow never creates or updates repository refs itself.
+
+### Record a flake
+
+Decide explicitly whether each failed test blocks release or is a flake. Rerun
+a flake on the same Release SHA at most twice with `frv rerun --job`, and file an
+issue or PR tracking its fix on `main`. Do not re-cut the release, change tooling,
+or start a new Full Release Validation for it. A flake never blocks publication
+once its eligible failure is recorded.
+
+For a still-failing `normalCi` job, dispatch the classification workflow from
+trusted `main`, using the exact job URL from its accepted attempt:
+
+```bash
+gh workflow run full-release-flake-classification.yml --repo openclaw/openclaw --ref main \
+  -f job_url='https://github.com/openclaw/openclaw/actions/runs/<child-run-id>/job/<job-id>' \
+  -f tracking_url='https://github.com/openclaw/openclaw/issues/<issue-number>' \
+  -f reason='Describe the observed flake and why the release can proceed.'
+```
+
+Wait for that classification run to succeed. Its receipt binds the FRV parent,
+CI child, Release SHA, accepted job ID/attempt, actor, reason, and tracking issue
+or PR. Then run `pnpm frv continue --failed --run <parent-run-id>`: when all
+remaining failures are advisory, it reruns only the parent collector and verifies
+the sealed manifest. It does not rerun the classified child. Inspect `frv status`
+first if other blockers remain, because `continue --failed` retries them.
+
+The `recorded-flake` class is limited to `normalCi` in v1. CI coverage gates,
+seal/evidence jobs, Build Artifacts, install smoke, survivor, first-hop, pack/npm
+qualification, Package Acceptance, and package integrity cannot be classified.
+Other children remain strict; extending the scope is follow-up work. A failed
+`openclaw/ci-gate` is accepted only when every other failed job is advisory,
+at least one has a recorded classification, and its log proves every non-passing
+entry is `selected=true` with result `failure`. Matrix job display names may
+differ from gate keys. Skipped, cancelled, missing, or unrecognized entries block.
+A later rerun creates a different job ID and invalidates the old classification
+for that job.
 
 ### Automatic retries for declared flakes
 

@@ -7,6 +7,7 @@ import type { SessionAcpMeta } from "../../config/sessions/types.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
 import { AcpRuntimeError } from "../runtime/errors.js";
 import type { AcpSessionTarget } from "./manager.types.js";
+import { resolveAcpRuntimeAgentId } from "./manager.utils.js";
 
 /** Old backends can isolate qualified keys, but silently ignore an added owner field. */
 export function assertAcpRuntimeOwnerSupport(runtime: AcpRuntime, target: AcpSessionTarget): void {
@@ -39,7 +40,9 @@ export function persistedAcpRuntimeHandle(
   const identity = resolveSessionIdentityFromMeta(meta);
   return {
     sessionKey: target.sessionKey,
-    agentId: target.agentId,
+    // Backends revalidate persisted handles against the harness namespace on
+    // free ACP keys; metadata keeps the admitted owner separately.
+    agentId: resolveAcpRuntimeAgentId(target.sessionKey, target.agentId),
     backend: meta.backend,
     runtimeSessionName: meta.runtimeSessionName,
     cwd: meta.cwd,

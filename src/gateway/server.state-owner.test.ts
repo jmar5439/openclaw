@@ -9,6 +9,7 @@ import { startGatewayServer } from "./server.js";
 type GatewayLock = NonNullable<Awaited<ReturnType<typeof acquireGatewayLock>>>;
 const runtime = vi.hoisted(() => ({
   close: async () => {},
+<<<<<<< HEAD
   start: async () => {},
   startupError: undefined as Error | undefined,
   locks: [] as GatewayLock[],
@@ -25,6 +26,12 @@ vi.mock("../infra/gateway-state-owner.js", async (importOriginal) => {
     },
   };
 });
+=======
+  startupError: undefined as Error | undefined,
+  locks: [] as GatewayLock[],
+}));
+
+>>>>>>> test/all-fixes-2026.9.8
 vi.mock("../infra/gateway-lock.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../infra/gateway-lock.js")>();
   return {
@@ -51,7 +58,10 @@ vi.mock("../state/openclaw-state-lease-heartbeat.js", () => ({
 }));
 vi.mock("./server-start.js", () => ({
   startGatewayServerCore: async () => {
+<<<<<<< HEAD
     await runtime.start();
+=======
+>>>>>>> test/all-fixes-2026.9.8
     if (runtime.startupError) {
       throw runtime.startupError;
     }
@@ -69,9 +79,13 @@ beforeEach(() => {
   vi.stubEnv("OPENCLAW_STATE_DIR", root);
   vi.stubEnv("OPENCLAW_CONFIG_PATH", path.join(root, "openclaw.json"));
   runtime.close = async () => {};
+<<<<<<< HEAD
   runtime.start = async () => {};
   runtime.startupError = undefined;
   runtime.ownerLoss = new AbortController();
+=======
+  runtime.startupError = undefined;
+>>>>>>> test/all-fixes-2026.9.8
 });
 afterEach(async () => {
   for (const lock of runtime.locks.splice(0)) {
@@ -103,6 +117,7 @@ it("refuses a second direct Gateway until the first finishes closing", async () 
   expect(await readActiveGatewayLockIdentity()).toBeUndefined();
 });
 
+<<<<<<< HEAD
 it("joins a lost direct owner's close once before releasing its lock", async () => {
   const closing = createDeferredCore();
   const closed = createDeferredCore();
@@ -162,6 +177,14 @@ it("closes a server opened during custody loss before rejecting startup", async 
   started.resolve();
   await rejected;
   expect(runtime.close).toHaveBeenCalledOnce();
+=======
+it("releases direct ownership after a clean startup failure", async () => {
+  runtime.startupError = new Error("startup failed");
+  await expect(startGatewayServer(18701)).rejects.toBe(runtime.startupError);
+  runtime.startupError = undefined;
+  const successor = await startGatewayServer(18702);
+  await successor.close();
+>>>>>>> test/all-fixes-2026.9.8
   expect(await readActiveGatewayLockIdentity()).toBeUndefined();
 });
 
@@ -179,6 +202,7 @@ it("keeps the run loop's owner across server generations and rejects its retired
   );
 });
 
+<<<<<<< HEAD
 it.each(["clean startup", "startup", "shutdown"] as const)(
   "releases ownership only after successful cleanup: %s",
   async (phase) => {
@@ -187,6 +211,13 @@ it.each(["clean startup", "startup", "shutdown"] as const)(
         ? new Error("startup failed")
         : new GatewayStartupCleanupError(new Error("startup"), new Error("cleanup"));
     if (phase !== "shutdown") {
+=======
+it.each(["startup", "shutdown"] as const)(
+  "retains direct ownership when %s cleanup has not completed",
+  async (phase) => {
+    const failure = new GatewayStartupCleanupError(new Error("startup"), new Error("cleanup"));
+    if (phase === "startup") {
+>>>>>>> test/all-fixes-2026.9.8
       runtime.startupError = failure;
       await expect(startGatewayServer(18701)).rejects.toBe(failure);
       runtime.startupError = undefined;
@@ -198,6 +229,7 @@ it.each(["clean startup", "startup", "shutdown"] as const)(
       await expect(first.close()).rejects.toBe(failure);
       runtime.close = async () => {};
     }
+<<<<<<< HEAD
     if (phase === "clean startup") {
       const successor = await startGatewayServer(18702);
       await successor.close();
@@ -205,5 +237,8 @@ it.each(["clean startup", "startup", "shutdown"] as const)(
     } else {
       await expect(startGatewayServer(18702)).rejects.toThrow("gateway state ownership");
     }
+=======
+    await expect(startGatewayServer(18702)).rejects.toThrow("gateway state ownership");
+>>>>>>> test/all-fixes-2026.9.8
   },
 );

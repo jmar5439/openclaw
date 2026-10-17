@@ -102,17 +102,33 @@ Run the CLI via `pnpm openclaw ...` or `pnpm dev`, never `node --import tsx src/
 
 Read matching guides in full; commands and details stay with them.
 
-- **Plugins/SDK:** [plugins](extensions/AGENTS.md), [loader](src/plugins/AGENTS.md), [SDK](src/plugin-sdk/AGENTS.md) (owns public boundary expansion, including outside callers).
-- **Channels/message actions:** [channel boundary](src/channels/AGENTS.md), [channel responsibilities](docs/plugins/sdk-channel-plugins.md).
-- **Agent tools, prompts, admission, lifecycle:** [agents](src/agents/AGENTS.md), [Gateway](src/gateway/AGENTS.md).
-- **Control UI:** [UI guide](ui/AGENTS.md), including state shared with other Gateway clients.
-- **Storage:** [database schemas](docs/reference/database-schemas.md) and its subpages; read its approval checkpoint before schema, transaction, retention, or recovery changes.
-- **Config migration:** [Doctor transforms](docs/gateway/doctor/config-migrations.md), never new runtime compatibility readers.
-- **Audit/identity:** [audit doctrine](docs/gateway/audit.md); provenance is opt-in, never authorization; changes to collection, reader scope, retained fields, bounds, or contracts need approval.
-- **Codex-backed behavior:** personally inspect and cite the exact sibling `../codex` source first; other agents' reports don't substitute. Routes use `openai` (`openai-codex` only in migration); refresh [the harness guide](docs/plugins/codex-harness.md) from `model/list` on upgrades.
-- **Validation:** [test suites](docs/help/testing/suites.md) lists commands; [writing tests](docs/help/testing/writing-tests.md) for authoring.
-- **GitHub:** [contribution rules](CONTRIBUTING.md), the PR template, [review feedback](docs/reference/pull-request-review-flow.md); `scripts/pr` follows the [scripts guide](scripts/AGENTS.md).
-- **Docs:** [docs guide](docs/AGENTS.md); update docs with behavior; fix notes go in PRs (`CHANGELOG.md` is release-owned).
-- **Releases:** the release workflow and [release contract](docs/reference/RELEASING.md); preserve the selected cut and identity through publication and verification. npm-format lock mirrors are verified against `pnpm-lock.yaml`, published in dependency evidence, and kept out of npm tarballs.
-- **Secrets/advisories:** [secrets](docs/gateway/secrets.md), [auth](docs/auth-credential-semantics.md), [security reporting](SECURITY.md).
-- **Live channels/native apps:** the scoped guide; Telegram claims need Test Server userbot proof (Convex-leased credentials), platform claims real device evidence, Mac permission proof a stable, [signed](docs/platforms/mac/signing.md) app.
+- **Product/design:** [VISION.md](VISION.md).
+- **Plugins/discovery/SDK:** [plugins](extensions/AGENTS.md), [loader](src/plugins/AGENTS.md), [SDK](src/plugin-sdk/AGENTS.md). The SDK guide owns public boundary expansion, including callers outside these trees.
+- **Channels/message actions:** [channel boundary](src/channels/AGENTS.md) and [channel responsibilities](docs/plugins/sdk-channel-plugins.md).
+- **Agent tools, prompts, admission, or lifecycle:** [agents](src/agents/AGENTS.md) and [Gateway](src/gateway/AGENTS.md).
+- **Control UI state, requests, or presentation:** [UI guide](ui/AGENTS.md), including state shared with other Gateway clients.
+- **Storage:** [database schemas](docs/reference/database-schemas.md), then its layout, versioning, and storage-changes pages for the affected contract. Read the approval checkpoint before changing schema, transactions, retention, or recovery.
+- **Config retirement/migration:** [shared Doctor transforms and startup migration](docs/gateway/doctor/config-migrations.md); reuse this owner instead of new runtime compatibility readers.
+- **Audit/identity/receipts:** [audit doctrine](docs/gateway/audit.md). Diagnostic provenance is opt-in and never authorization; changes to collection, reader scope, retained fields, bounds, or contracts require approval.
+- **Codex-backed behavior:** personally inspect the exact sibling `../codex` source before implementation or verdict and cite it; wrappers, schemas, and another agent's report do not replace this check. Auth/runtime/catalog routes use `openai`; legacy `openai-codex` input belongs only in migration. Harness upgrades refresh [the harness guide](docs/plugins/codex-harness.md) from `model/list`.
+- **Validation commands:** [test suites](docs/help/testing/suites.md) is a command reference; this file and the chosen workflow own check selection. Test authoring also uses [writing tests](docs/help/testing/writing-tests.md) and the owning scoped guide.
+- **GitHub:** [contribution rules](CONTRIBUTING.md), the current PR template, and [review feedback](docs/reference/pull-request-review-flow.md). The authorized maintainer workflow owns landing; native `scripts/pr` gates, recovery, and cleanup require [scripts guide](scripts/AGENTS.md).
+- **Useful GitHub Workflow Commands:**
+  - Compilar una rama sin tocarla ni desplegar:
+    `gh workflow run build-fork --repo jmar5439/openclaw --ref ci/build-fork --field ref=<branch-name>`
+  - Desplegar a prod (PEDIR APROBACIÓN ANTES, es directo a prod):
+    `gh workflow run build-fork --repo jmar5439/openclaw --ref ci/build-fork --field ref=<branch-name> --field deploy=true`
+  - Deploy (solo si dispatch con `deploy=true`): descarga artefacto, scp a
+    `/tmp/openclaw-fork.tgz`, `npm i -g`, restart gateway, verifica
+    `openclaw --version` = sufijo, comprueba `~/.openclaw/extensions` y servicio
+  - NO descargar el artefacto con `gh run download` en el host del gateway:
+    el disco va justo y una descarga + install ya provocó ENOSPC (rompió el
+    binario `openclaw`). Con `deploy=true` el propio workflow deja el tgz en
+    `/tmp/openclaw-fork.tgz`; instalar desde ahí (`npm i -g
+/tmp/openclaw-fork.tgz`). Antes de instalar, comprobar `df -h /` y si
+    hace falta liberar con `npm cache clean --force`; no borrar backups ni
+    datos de usuario.
+- **Docs/public links:** [docs guide](docs/AGENTS.md). Update docs with behavior; normal fix notes belong in PRs because `CHANGELOG.md` is release-owned.
+- **Releases:** the chosen release workflow and [release contract](docs/reference/RELEASING.md). Preserve the selected release cut and identity through publication and verification. npm-format lock mirrors are verified against `pnpm-lock.yaml`, published in dependency evidence, and kept out of npm tarballs.
+- **Secrets/advisories:** [secret semantics](docs/gateway/secrets.md), [auth semantics](docs/auth-credential-semantics.md), and [security reporting](SECURITY.md) for the affected branch.
+- **Live channels/native apps:** the owning scoped guide and permitted proof workflow. Telegram claims require Test Server userbot proof with Convex-leased credentials; platform claims require the relevant real device/platform evidence. Mac permission proof needs a stable, properly signed app; see [signing](docs/platforms/mac/signing.md).

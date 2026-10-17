@@ -261,6 +261,80 @@ describe("runtime conversation binding route", () => {
     ]);
   });
 
+  it("rewrites the route and touches only the owning channel account's binding", () => {
+    const binding = createBinding();
+    const { resolveByConversation, touch } = registerAdapter(binding);
+    const siblingTouches = [
+      { channel: "other", accountId: "default" },
+      { channel: "demo", accountId: "other" },
+    ].map(
+      (scope) =>
+        registerAdapter(createBinding({ conversation: { ...binding.conversation, ...scope } }))
+          .touch,
+    );
+
+    const result = resolveRuntimeConversationBindingRoute({
+      route: createRoute(),
+      conversation: {
+        channel: "demo",
+        accountId: "default",
+        conversationId: "room-1",
+      },
+    });
+
+    expect(resolveByConversation).toHaveBeenCalledWith({
+      channel: "demo",
+      accountId: "default",
+      conversationId: "room-1",
+    });
+    expect(touch).toHaveBeenCalledWith("binding-1", undefined);
+    for (const siblingTouch of siblingTouches) {
+      expect(siblingTouch).not.toHaveBeenCalled();
+    }
+    expect(result.boundSessionKey).toBe("agent:review:acp:session-1");
+    expect(result.boundAgentId).toBe("review");
+    expect(Object.fromEntries(Object.entries(result.route))).toEqual({
+      agentId: "review",
+      accountId: "default",
+      channel: "demo",
+      sessionKey: "agent:review:acp:session-1",
+      mainSessionKey: "agent:review:main",
+      lastRoutePolicy: "session",
+      matchedBy: "binding.channel",
+      // Free ACP harness keys keep the pre-rewrite channel agent as dispatch owner (#146365).
+      ownerAgentId: "main",
+    });
+  });
+
+  it("touches plugin-owned bindings without rewriting the channel route", () => {
+    const route = createRoute();
+    const binding = createBinding({
+      metadata: {
+        pluginBindingOwner: "plugin",
+        pluginId: "demo-plugin",
+        pluginRoot: "/tmp/demo-plugin",
+      },
+    });
+    const { touch } = registerAdapter(binding);
+
+    const result = resolveRuntimeConversationBindingRoute({
+      route,
+      conversation: {
+        channel: "demo",
+        accountId: "default",
+        conversationId: "room-1",
+      },
+    });
+
+    expect(touch).toHaveBeenCalledWith("binding-1", undefined);
+    expect(result.bindingRecord).toBe(binding);
+    expect(result.boundSessionKey).toBeUndefined();
+    expect(Object.fromEntries(Object.entries(result.route))).toEqual(route);
+    expect(readConversationBindingRouteFacts(route)).toBeUndefined();
+    expect(Object.isFrozen(readConversationBindingRouteFacts(result.route))).toBe(true);
+    expect(readConversationBindingRouteFacts(result.route)?.kind).toBe("plugin");
+  });
+
   it.each([
     { name: "agent session", binding: createBinding(), kind: "agent", agentId: "review" },
     {

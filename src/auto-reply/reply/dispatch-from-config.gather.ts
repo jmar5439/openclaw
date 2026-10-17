@@ -11,6 +11,8 @@ import type {
   PreparedModelRuntimeLease,
   PreparedReplyDispatchRuntime,
 } from "../../agents/prepared-model-runtime.types.js";
+import type { PreparedReplyDispatchRuntime } from "../../agents/prepared-model-runtime.types.js";
+import { resolveConversationBindingRouteOwnerAgentId } from "../../channels/conversation-binding-route-facts.js";
 import { normalizeExplicitSessionKey } from "../../config/sessions/explicit-session-key-normalization.js";
 import {
   deriveInboundMessageHookContext,
@@ -27,7 +29,11 @@ import {
 import { createDiagnosticMessageLifecycle } from "../../logging/message-lifecycle.js";
 import { stripLegacyMediaContextFields } from "../../media/media-facts.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
-import { resolveSessionDispatchKind } from "../../sessions/session-key-utils.js";
+import { normalizeAgentIdStrict } from "../../routing/session-key.js";
+import {
+  isFreeAcpSessionKey,
+  resolveSessionDispatchKind,
+} from "../../sessions/session-key-utils.js";
 import { prepareChannelParticipantObservation } from "../../sessions/session-participant-input.js";
 import { readAgentDatabaseAdmissionRefusal } from "../../state/agent-database-admission.js";
 import { normalizeTtsAutoMode } from "../../tts/tts-config.js";
@@ -66,6 +72,16 @@ import { replyRunRegistry } from "./reply-run-registry.js";
 import { isReplyProfilerEnabled } from "./reply-timing-tracker.js";
 import { resolveRoutedDeliveryThreadId } from "./routed-delivery-thread.js";
 import { stageRemoteInboundMediaIfNeeded } from "./stage-remote-inbound-media.js";
+
+/** Accepts only a representable configured owner id; malformed values never select a fallback owner. */
+function resolveRouteOwnerAgentId(raw: string | undefined): string | undefined {
+  const trimmed = normalizeOptionalString(raw);
+  if (!trimmed) {
+    return undefined;
+  }
+  const normalized = normalizeAgentIdStrict(trimmed);
+  return normalized.ok ? normalized.value : undefined;
+}
 
 export async function gatherDispatchRequest(
   params: DispatchFromConfigParams,
@@ -377,7 +393,13 @@ export async function gatherDispatchRequest(
   const sessionAgentId = resolveSessionAgentId({
     sessionKey: acpDispatchSessionKey,
     config: cfg,
-    fallbackAgentId: ctx.AgentId,
+    fallbackAgentId: isFreeAcpSessionKey(acpDispatchSessionKey)
+      ? (resolveRouteOwnerAgentId(ctx.RouteOwnerAgentId) ??
+        resolveRouteOwnerAgentId(
+          resolveConversationBindingRouteOwnerAgentId(ctx, acpDispatchSessionKey),
+        ) ??
+        ctx.AgentId)
+      : ctx.AgentId,
   });
   const sessionAgentCfg = resolveAgentConfig(cfg, sessionAgentId);
   const verboseProgress = createShouldEmitVerboseProgress({
@@ -411,9 +433,17 @@ export async function gatherDispatchRequest(
   const sessionTtsAuto = normalizeTtsAutoMode(sessionStoreEntry.entry?.ttsAuto);
   // A bound ACP key names an external harness, not a configured model-runtime owner.
   // Keep the source owner for Gateway dispatch while ACP execution uses the bound target below.
-  const preparedReplyDispatchAgentId = boundAcpDispatchSessionKey
-    ? resolveSessionAgentId({ sessionKey, config: cfg, fallbackAgentId: ctx.AgentId })
-    : sessionAgentId;
+  // Channel routing that already presents the free harness key as SessionKey names that owner
+  // in RouteOwnerAgentId; the key itself cannot recover it.
+  const routeOwnerAgentId = isFreeAcpSessionKey(sessionKey)
+    ? (resolveRouteOwnerAgentId(ctx.RouteOwnerAgentId) ??
+      resolveRouteOwnerAgentId(resolveConversationBindingRouteOwnerAgentId(ctx, sessionKey)))
+    : undefined;
+  const preparedReplyDispatchAgentId =
+    routeOwnerAgentId ??
+    (boundAcpDispatchSessionKey
+      ? resolveSessionAgentId({ sessionKey, config: cfg, fallbackAgentId: ctx.AgentId })
+      : sessionAgentId);
   let preparedReplyDispatchRuntime: PreparedReplyDispatchRuntime | undefined;
   try {
     // Channel monitors can retain an older config across hot reloads. The Gateway

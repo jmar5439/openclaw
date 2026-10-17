@@ -92,6 +92,9 @@ export async function upsertAcpSessionMetaNative(params: {
   }
   const { entry, storePath } = storeEntry;
   const storageSessionKey = storeEntry.storeSessionKey;
+  // Entry rows and metadata live in the harness store on free ACP keys while
+  // the admitted configured owner stays on policy and delivery (#146365).
+  const storeOwnerId = storeEntry.storeAgentId ?? storeEntry.agentId;
   let current: SessionAcpMeta | undefined;
   let currentRowKey: string | undefined;
   let nextMeta: SessionAcpMeta | null | undefined;
@@ -101,7 +104,7 @@ export async function upsertAcpSessionMetaNative(params: {
     (database) => {
       params.assertCommitAllowed?.();
       const fresh = readLegacyAcpMigrationContext({
-        agentId: storeEntry.agentId,
+        agentId: storeOwnerId,
         storePath,
         sessionKey: storageSessionKey,
         env: params.env,
@@ -115,7 +118,7 @@ export async function upsertAcpSessionMetaNative(params: {
       const currentRow = selectAcpSessionRowForStoreEntry(
         database.db,
         storageSessionKey,
-        storeEntry.agentId,
+        storeOwnerId,
         storeEntry.cfg,
         entry,
       );
@@ -174,7 +177,7 @@ export async function upsertAcpSessionMetaNative(params: {
     const patched = entry
       ? await patchSessionEntryWithKey(
           {
-            ...(storeEntry.agentId ? { agentId: storeEntry.agentId } : {}),
+            ...(storeOwnerId ? { agentId: storeOwnerId } : {}),
             storePath: storeEntry.storePath,
             sessionKey: storageSessionKey,
           },
@@ -197,8 +200,36 @@ export async function upsertAcpSessionMetaNative(params: {
         )
       : null;
     publish(patched?.sessionKey ?? storageSessionKey, patched?.entry ?? entry, { kind: "clear" });
+    runOpenClawStateWriteTransaction(
+      (database) => {
+        params.assertCommitAllowed?.();
+        consumeLegacyAcpMigrationSources({
+          database: database.db,
+          agentId: storeOwnerId,
+          storePath,
+          sessionKey: patched?.sessionKey ?? storageSessionKey,
+          entry: patched?.entry ?? entry,
+          expectedControlBinding: params.expectedControlBinding,
+          env: params.env,
+          now: updatedAt,
+        });
+        applyAcpSessionMutation(database.db, {
+          agentId: storeOwnerId,
+          storageSessionKey,
+          sessionKey: patched?.sessionKey ?? storageSessionKey,
+          entry: patched?.entry ?? entry,
+          currentRowKey,
+          decision: { kind: "clear" },
+        });
+        sessionChanges.emit(
+          { agentId: storeOwnerId, sessionKey: patched?.sessionKey ?? storageSessionKey },
+          database.db,
+        );
+      },
+      { env: params.env, path: params.databasePath },
+    );
     await clearLegacyEmbeddedAcpMetadata({
-      agentId: storeEntry.agentId,
+      agentId: storeOwnerId,
       storePath: storeEntry.storePath,
       sessionKeys: [storageSessionKey, patched?.sessionKey],
       expectedEntry: patched?.entry ?? entry ?? null,
@@ -209,7 +240,7 @@ export async function upsertAcpSessionMetaNative(params: {
   }
   const persisted = await patchSessionEntryWithKey(
     {
-      ...(storeEntry.agentId ? { agentId: storeEntry.agentId } : {}),
+      ...(storeOwnerId ? { agentId: storeOwnerId } : {}),
       storePath: storeEntry.storePath,
       sessionKey: storageSessionKey,
     },
@@ -237,7 +268,7 @@ export async function upsertAcpSessionMetaNative(params: {
     return null;
   }
   await clearLegacyEmbeddedAcpMetadata({
-    agentId: storeEntry.agentId,
+    agentId: storeOwnerId,
     storePath: storeEntry.storePath,
     sessionKeys: [storageSessionKey, persisted.sessionKey],
     expectedEntry: persisted.entry,
@@ -247,4 +278,31 @@ export async function upsertAcpSessionMetaNative(params: {
   // The entry patch and legacy cleanup settle before this authoritative publication.
   publish(persisted.sessionKey, persisted.entry, { kind: "set", meta: metaToPersist });
   return mergeSessionEntry(persisted.entry, { acp: metaToPersist });
+  runOpenClawStateWriteTransaction(
+    (database) => {
+      // The entry patch and legacy cleanup await before this authoritative publication.
+      params.assertCommitAllowed?.();
+      consumeLegacyAcpMigrationSources({
+        database: database.db,
+        agentId: storeOwnerId,
+        storePath,
+        sessionKey: persisted.sessionKey,
+        entry: persisted.entry,
+        expectedControlBinding: params.expectedControlBinding,
+        env: params.env,
+        now: updatedAt,
+      });
+      applyAcpSessionMutation(database.db, {
+        agentId: storeOwnerId,
+        storageSessionKey,
+        sessionKey: persisted.sessionKey,
+        entry: persisted.entry,
+        currentRowKey,
+        decision: { kind: "set", meta: metaToPersist },
+      });
+      sessionChanges.emit({ agentId: storeOwnerId, sessionKey: persisted.sessionKey }, database.db);
+    },
+    { env: params.env, path: params.databasePath },
+  );
+  return mergeAcpForReturn(persisted.entry, metaToPersist);
 }

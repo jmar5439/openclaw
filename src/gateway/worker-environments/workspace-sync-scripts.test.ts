@@ -13,6 +13,7 @@ import { workspaceQuiescenceArgv } from "./workspace-quiescence-scripts.js";
 import { createWorkerWorkspaceQuiescence } from "./workspace-quiescence.js";
 
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
+const PADDED_PROCESS_START = "Thu Oct  1 00:11:43 2026";
 
 function quiescenceCommand(...args: Parameters<typeof workspaceQuiescenceArgv>) {
   return [process.execPath, ...workspaceQuiescenceArgv(...args).slice(1)];

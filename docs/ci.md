@@ -104,6 +104,13 @@ Other jobs keep their existing admission thresholds; the hosted row total counts
 only the rows actually offloaded. Compiler concurrency, coverage and cache guards
 are unchanged.
 
+The extension package boundary row has a 30-minute job budget for SDK preparation,
+all selected plugin compiles, input-receipt validation, the required negative
+canary, and cleanup. Hosted four-CPU runs spent about 19 minutes in the compile
+command alone; one completed compile and canary but exceeded the former
+20-minute whole-job deadline. Other additional-check rows retain 20 minutes.
+This changes no compiler concurrency, coverage, runner routing, or cache guards.
+
 Core lint discovers separate source and UI TypeScript projects, retaining shared ambient declarations and imported dependencies. The source project also includes `src/**/*.test-support.cjs`; unrelated JavaScript files are not added as roots. See [local checks](/ci/local-proof#local-equivalents).
 
 Runtime topology checks inherit the existing [Go memory defaults](/ci/local-proof#local-equivalents), with caller overrides and the full architecture check sequence retained.

@@ -436,6 +436,59 @@ describe("createTelegramDraftStream", () => {
     },
   );
 
+  it("retains a confirmed final answer across rotation instead of deleting it", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = createMockDraftApi();
+      api.sendMessage.mockResolvedValueOnce({ message_id: 17 });
+      const onRetainedPage = vi.fn();
+      const stream = createDraftStream(api, { onRetainedPage });
+      stream.update("Final answer");
+      await vi.advanceTimersByTimeAsync(0);
+      await stream.flush();
+      await stream.stop();
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+
+      // A later rotation (e.g. tool-progress reposition racing teardown) must
+      // not drop the visible answer ~1.5s later.
+      stream.rotateToNewMessageDeferringDelete();
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+      expect(onRetainedPage).toHaveBeenCalledWith(expect.objectContaining({ messageId: 17 }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retains a late first send carrying the answer when nothing replaced it", async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveFirstSend: ((value: { message_id: number }) => void) | undefined;
+      const firstSend = new Promise<{ message_id: number }>((resolve) => {
+        resolveFirstSend = resolve;
+      });
+      const api = createMockDraftApi();
+      api.sendMessage.mockReturnValueOnce(firstSend);
+      const onRetainedPage = vi.fn();
+      const stream = createDraftStream(api, { onRetainedPage });
+      stream.update("Final answer");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+
+      // Rotate while the first (and only) send is still in flight, then let it
+      // land without requesting any replacement content.
+      stream.rotateToNewMessageDeferringDelete();
+      resolveFirstSend?.({ message_id: 17 });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onRetainedPage).toHaveBeenCalledWith(expect.objectContaining({ messageId: 17 }));
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not report a first preview cleared while its send is in flight", async () => {
     vi.useFakeTimers();
     try {
@@ -586,6 +639,29 @@ describe("createTelegramDraftStream", () => {
       resolveReplacement({ message_id: 42 });
       await vi.advanceTimersByTimeAsync(1_500);
       expect(api.deleteMessage).toHaveBeenCalledWith(123, 17);
+     } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("never deletes a finalized preview on clear (same-bubble final answer)", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = createMockDraftApi();
+      const stream = createDraftStream(api);
+
+      // Tool progress preview, then finalized in place like a delivered answer.
+      stream.update("Working");
+      await stream.flush();
+      stream.update("Final answer");
+      await stream.stop();
+      expect(api.editMessageText).toHaveBeenLastCalledWith(123, 17, "Final answer");
+      expect(api.deleteMessage).not.toHaveBeenCalled();
+
+      // A late teardown must retain the delivered bubble instead of dropping
+      // it seconds after delivery.
+      await stream.clear();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(api.deleteMessage).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -613,6 +689,30 @@ describe("createTelegramDraftStream", () => {
 
       await stream.clear();
       await vi.advanceTimersByTimeAsync(1_500);
+       } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("deletes the preview when the final edit is rejected (fallback sent separately)", async () => {
+    vi.useFakeTimers();
+    try {
+      const api = createMockDraftApi();
+      const stream = createDraftStream(api);
+
+      stream.update("Working");
+      await stream.flush();
+      // The final edit is rejected (e.g. message can no longer be edited):
+      // stop() still marks final, but the bubble keeps the stale preview and
+      // the lane falls back to a separate send — teardown must delete it.
+      api.editMessageText.mockRejectedValueOnce(
+        Object.assign(new Error("400: Bad Request: message can't be edited"), {
+          error_code: 400,
+        }),
+      );
+      stream.update("Final answer");
+      await stream.stop();
+      await stream.clear();
+      await vi.advanceTimersByTimeAsync(10_000);
       expect(api.deleteMessage).toHaveBeenCalledWith(123, 17);
     } finally {
       vi.useRealTimers();

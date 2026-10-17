@@ -76,6 +76,10 @@ async function mutateAcpSessionMeta(
   });
   const store = resolveSessionStorePathForAcp({ ...captured, sessionKey, agentId: params.agentId });
   const mutateNative = (assertCommitAllowed = captured.assertCurrent) => {
+  // Metadata rows and entry scopes follow the harness store on free ACP keys;
+  // control-identity comparisons below keep the admitted owner (#146365).
+  const rowOwnerId = store.storeAgentId ?? store.agentId;
+  if (isIncognitoSessionKey(sessionKey)) {
     if (control) {
       throw new Error("ACP controlled metadata mutation requires its durable worker source");
     }
@@ -91,7 +95,7 @@ async function mutateAcpSessionMeta(
   }
   return withSessionEntryReadOnlyInWorker(
     {
-      agentId: store.agentId,
+      agentId: store.storeAgentId,
       storePath: store.storePath,
       sessionKey: store.storeSessionKey,
       env: captured.env,
@@ -126,8 +130,8 @@ async function mutateAcpSessionMeta(
       const key = normalizeStoreSessionKey(store.storeSessionKey);
       const metadataRead = {
         keys: [
-          buildAcpDatabaseSessionKey(key, store.agentId),
-          ...legacyAcpDatabaseSessionKeys(key, store.agentId, captured.cfg),
+          buildAcpDatabaseSessionKey(key, rowOwnerId),
+          ...legacyAcpDatabaseSessionKeys(key, rowOwnerId, captured.cfg),
         ],
         legacyKey: resolveLegacyFreeAcpSessionKey(key),
       };
@@ -193,7 +197,7 @@ async function mutateAcpSessionMeta(
                 updatedAt,
                 source: source(),
                 sessionKey: key,
-                agentId: store.agentId,
+                agentId: rowOwnerId,
                 expectedControlBinding,
                 control,
               },
@@ -259,11 +263,11 @@ async function mutateAcpSessionMeta(
             : (preparation.entry ?? null);
         }
         const scope = {
-          agentId: store.agentId,
+          agentId: rowOwnerId,
           databaseAgentId: options.agentId,
           path: options.path,
           env: captured.env,
-          sessionKey: resolveSqliteSessionKey(key, store.agentId),
+          sessionKey: resolveSqliteSessionKey(key, rowOwnerId),
         };
         const update = (
           mutation: Parameters<typeof updateAcpSessionStoreEntry>[0]["mutation"],
@@ -304,7 +308,7 @@ async function mutateAcpSessionMeta(
         await commitAcpSessionMutation(
           context,
           {
-            agentId: store.agentId,
+            agentId: rowOwnerId,
             storageSessionKey: key,
             sessionKey: key,
             entry: commitEntry,

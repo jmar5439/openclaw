@@ -1,10 +1,15 @@
 import { expect, it } from "vitest";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { markMcpLoopbackToolCallStarted } from "../gateway/mcp-http.loopback-runtime.js";
+<<<<<<< HEAD
+=======
+import type { getProcessSupervisor } from "../process/supervisor/index.js";
+>>>>>>> test/all-fixes-2026.9.8
 import type { RunExit } from "../process/supervisor/types.js";
 import { supervisorSpawnMock, type createManagedRun } from "./cli-runner.test-support.js";
 import type { PreparedCliRunContext, RunCliAgentParams } from "./cli-runner/types.js";
 import type { EmbeddedAgentRunResult } from "./embedded-agent-runner/types.js";
+<<<<<<< HEAD
 import { hasModelFallbackStop } from "./failover-error.js";
 
 /** Register required-reply cases inside the reliability suite's existing process fixture. */
@@ -14,6 +19,10 @@ export function registerCliReplyCompletionTests({
   makeManagedRun,
   run,
 }: {
+=======
+
+export function registerCliReplyCompletionTests(params: {
+>>>>>>> test/all-fixes-2026.9.8
   createContext: (params: Partial<RunCliAgentParams>) => PreparedCliRunContext;
   completeToolCall: (
     call: Parameters<typeof markMcpLoopbackToolCallStarted>[0],
@@ -29,8 +38,15 @@ export function registerCliReplyCompletionTests({
   ] as const)(
     "settles NO_REPLY after $name without replaying a send",
     async ({ target, final, expected }) => {
+<<<<<<< HEAD
       supervisorSpawnMock.mockImplementationOnce(async (input) => {
         completeToolCall(
+=======
+      supervisorSpawnMock.mockImplementationOnce(async (...args: unknown[]) => {
+        // SAFETY: the mocked method receives the process supervisor spawn arguments.
+        const input = args[0] as Parameters<ReturnType<typeof getProcessSupervisor>["spawn"]>[0];
+        params.completeToolCall(
+>>>>>>> test/all-fixes-2026.9.8
           {
             captureKey: input.env?.OPENCLAW_MCP_CLI_CAPTURE_KEY ?? "",
             toolName: "message",
@@ -47,9 +63,15 @@ export function registerCliReplyCompletionTests({
         input.onStdout?.(
           `${JSON.stringify({ type: "result", session_id: "claude-session", result: SILENT_REPLY_TOKEN })}\n`,
         );
+<<<<<<< HEAD
         return makeManagedRun();
       });
       const context = createContext({
+=======
+        return params.makeManagedRun();
+      });
+      const context = params.createContext({
+>>>>>>> test/all-fixes-2026.9.8
         sessionKey: "agent:main:telegram:direct:chat123",
         runId: "run-required-source-delivery",
         sourceReplyDeliveryMode: "message_tool_only",
@@ -59,7 +81,11 @@ export function registerCliReplyCompletionTests({
       });
       context.backendResolved.config.output = "jsonl";
 
+<<<<<<< HEAD
       const result = await run(context);
+=======
+      const result = await params.run(context);
+>>>>>>> test/all-fixes-2026.9.8
 
       expect(result.didSendViaMessagingTool).toBe(true);
       expect(result.meta.executionTrace?.attempts?.[0]?.result).toBe(expected);
@@ -71,6 +97,7 @@ export function registerCliReplyCompletionTests({
       expect(supervisorSpawnMock).toHaveBeenCalledOnce();
     },
   );
+<<<<<<< HEAD
 
   it.each([false, true])(
     "requires child continuation custody before accepting NO_REPLY (completion=%s)",
@@ -128,4 +155,6 @@ export function registerCliReplyCompletionTests({
       expect(supervisorSpawnMock).toHaveBeenCalledOnce();
     },
   );
+=======
+>>>>>>> test/all-fixes-2026.9.8
 }

@@ -20,6 +20,7 @@ import type {
   WriteManagerSessionMeta,
 } from "./manager.types.js";
 import { assertCurrentAcpActor, createSupersededActorError } from "./manager.utils.js";
+import { resolveAcpRuntimeAgentId } from "./manager.utils.js";
 import {
   normalizeRuntimeOptions,
   normalizeText,
@@ -68,11 +69,14 @@ export async function runManagerInitializeSession(params: {
   )?.acp;
   assertCurrent();
   input.assertActive?.();
+  // Runtime backends key sessions by the harness namespace on free ACP keys;
+  // the admitted configured owner stays on the persisted handle and metadata.
+  const runtimeAgentId = resolveAcpRuntimeAgentId(sessionKey, agentId);
   const ensured = await withAcpRuntimeErrorBoundary({
     run: async () =>
       await runtime.ensureSession({
         sessionKey,
-        agentId,
+        agentId: runtimeAgentId,
         persistedHandle:
           previousMeta?.backend === backend.id
             ? persistedAcpRuntimeHandle(params, previousMeta)
@@ -91,7 +95,7 @@ export async function runManagerInitializeSession(params: {
     fallbackCode: "ACP_SESSION_INIT_FAILED",
     fallbackMessage: "Could not initialize ACP session runtime.",
   });
-  const handle = { ...ensured, agentId, sessionKey };
+  const handle = { ...ensured, agentId: runtimeAgentId, sessionKey };
   if (!isCurrentActor()) {
     await closeSupersededRuntimeHandle({ runtime, handle, sessionKey });
     throw createSupersededActorError(sessionKey);

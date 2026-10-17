@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
+<<<<<<< HEAD
 import fsSync, { type Stats } from "node:fs";
+=======
+import fsSync from "node:fs";
+>>>>>>> test/all-fixes-2026.9.8
 import fs from "node:fs/promises";
 import path from "node:path";
 import { syncDirectory } from "@openclaw/fs-safe/durability";
@@ -66,6 +70,20 @@ afterEach(() => {
 
 type SnapshotOptions = Parameters<typeof createVerifiedSqliteSnapshot>[0];
 
+<<<<<<< HEAD
+=======
+async function expectSnapshotSuccess(options: SnapshotOptions): Promise<void> {
+  const snapshot = await createVerifiedSqliteSnapshot(options);
+  const published = await fs.readFile(options.targetPath);
+  expect(snapshot).toEqual({
+    path: options.targetPath,
+    userVersion: 0,
+    sha256: createHash("sha256").update(published).digest("hex"),
+    sizeBytes: published.length,
+  });
+}
+
+>>>>>>> test/all-fixes-2026.9.8
 async function expectSnapshotFailureWithoutTarget(
   options: SnapshotOptions,
   pattern: RegExp,
@@ -107,6 +125,7 @@ function mockExclusiveCopyTransfer() {
   return transfer;
 }
 
+<<<<<<< HEAD
 function mockUnavailableBirthtime(
   mode: "zero" | "ctime",
   afterTransfer?: (stagedPath: string) => Promise<void>,
@@ -148,6 +167,12 @@ describe("owned SQLite snapshot transfer", () => {
         mockUnavailableBirthtime(birthtime);
       }
       const copy = copyFallback ? mockExclusiveCopyTransfer() : undefined;
+=======
+describe("owned SQLite snapshot transfer", () => {
+  it.each([false, true])(
+    "publishes its owned private image without duplicating it (isolated=%s)",
+    async (isolated) => {
+>>>>>>> test/all-fixes-2026.9.8
       const source = new sqlite.DatabaseSync(sourcePath);
       try {
         source.exec(
@@ -159,7 +184,11 @@ describe("owned SQLite snapshot transfer", () => {
       const original = await fs.readFile(sourcePath);
       let inspected = false;
       let preparedBytes: Buffer | undefined;
+<<<<<<< HEAD
       const receipt = await createVerifiedSqliteSnapshot({
+=======
+      await createVerifiedSqliteSnapshot({
+>>>>>>> test/all-fixes-2026.9.8
         sourcePath,
         targetPath,
         preserveRowIds: true,
@@ -187,6 +216,7 @@ describe("owned SQLite snapshot transfer", () => {
         },
       });
       expect(inspected).toBe(true);
+<<<<<<< HEAD
       const published = await fs.readFile(targetPath);
       expect(receipt).toEqual({
         path: targetPath,
@@ -202,6 +232,11 @@ describe("owned SQLite snapshot transfer", () => {
       expect(await fs.readFile(sourcePath)).toEqual(original);
       withReadOnlySnapshot(sqlite, targetPath, (snapshot) => {
         expect(snapshot.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+=======
+      expect(await fs.readFile(targetPath)).toEqual(preparedBytes);
+      expect(await fs.readFile(sourcePath)).toEqual(original);
+      withReadOnlySnapshot(sqlite, targetPath, (snapshot) => {
+>>>>>>> test/all-fixes-2026.9.8
         expect(
           snapshot.prepare("SELECT rowid,value,length(payload) AS bytes FROM records").all(),
         ).toEqual([{ rowid: 71, value: "retained", bytes: 131072 }]);
@@ -240,6 +275,7 @@ describe("owned SQLite snapshot transfer", () => {
     });
   });
 
+<<<<<<< HEAD
   it("rejects same-size byte changes during a ctime-fallback transfer", async () => {
     const original = await fs.readFile(sourcePath);
     mockUnavailableBirthtime("ctime", async (stagedPath) => {
@@ -260,18 +296,56 @@ describe("owned SQLite snapshot transfer", () => {
       const original = await fs.readFile(sourcePath);
       const identityFailure = failure === "dev" || failure === "ino";
       let transferredSource: string | undefined;
+=======
+  it("accepts a copy fallback while transferring its private image", async () => {
+    const copy = mockExclusiveCopyTransfer();
+    await expectSnapshotSuccess({ sourcePath, targetPath, preserveRowIds: true });
+    expect(copy).toHaveBeenCalledOnce();
+    withReadOnlySnapshot(sqlite, targetPath, (snapshot) => {
+      expect(snapshot.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
+    });
+    expect((await fs.readdir(tempDir)).toSorted()).toEqual(["snapshot.sqlite", "source.sqlite"]);
+  });
+
+  it.each(["allocation", "durability"] as const)(
+    "cleans a failed private image transfer (%s) without changing its source",
+    async (failure) => {
+      const original = await fs.readFile(sourcePath);
+>>>>>>> test/all-fixes-2026.9.8
       durabilityTestState.transfer = async (options, publish) => {
         if (failure === "allocation") {
           throw Object.assign(new Error("private image transfer out of space"), { code: "ENOSPC" });
         }
         const receipt = await publish(options);
+<<<<<<< HEAD
         if (failure === "durability") {
           return { ...receipt, directorySync: { status: "unsupported", code: "ENOTSUP" } };
         }
+=======
+        return { ...receipt, directorySync: { status: "unsupported", code: "ENOTSUP" } };
+      };
+      await expectSnapshotFailureWithoutTarget(
+        { sourcePath, targetPath, preserveRowIds: true },
+        failure === "allocation" ? /out of space/ : /staging transfer directory/,
+      );
+      expect(await fs.readFile(sourcePath)).toEqual(original);
+      expect(await fs.readdir(tempDir)).toEqual(["source.sqlite"]);
+    },
+  );
+
+  it.each(["dev", "ino"] as const)(
+    "refuses an unknown source %s before retiring the transferred image",
+    async (field) => {
+      const original = await fs.readFile(sourcePath);
+      let transferredSource: string | undefined;
+      durabilityTestState.transfer = async (options, publish) => {
+        const receipt = await publish(options);
+>>>>>>> test/all-fixes-2026.9.8
         transferredSource = options.sourcePath;
         vi.spyOn(process, "platform", "get").mockReturnValue("win32");
         return receipt;
       };
+<<<<<<< HEAD
       if (identityFailure) {
         const lstat = fsSync.lstatSync.bind(fsSync);
         vi.spyOn(fsSync, "lstatSync").mockImplementation((...args) => {
@@ -296,6 +370,22 @@ describe("owned SQLite snapshot transfer", () => {
       } else {
         expect(await fs.readdir(tempDir)).toEqual(["source.sqlite"]);
       }
+=======
+      const lstat = fsSync.lstatSync.bind(fsSync);
+      vi.spyOn(fsSync, "lstatSync").mockImplementation((...args) => {
+        const stat = lstat(...args);
+        if (stat && String(args[0]) === transferredSource && typeof stat.dev === "bigint") {
+          Object.defineProperty(stat, field, { value: 0n });
+        }
+        return stat;
+      });
+      await expectSnapshotFailureWithoutTarget(
+        { sourcePath, targetPath, preserveRowIds: true },
+        /source changed during transfer/,
+      );
+      expect(transferredSource).toBeDefined();
+      expect(await fs.readFile(sourcePath)).toEqual(original);
+>>>>>>> test/all-fixes-2026.9.8
     },
   );
 });

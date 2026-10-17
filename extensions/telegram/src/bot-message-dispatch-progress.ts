@@ -11,6 +11,7 @@ import type { ReplyPayload } from "openclaw/plugin-sdk/reply-payload";
 import type { TelegramBotDeps } from "./bot-deps.js";
 import { deliverFallback } from "./bot-message-dispatch-delivery.js";
 import {
+  clearDraftLanesAtTeardown,
   enqueueDraftEvent,
   prepareAnswerLaneForToolProgress,
   retireAnswerLane,
@@ -134,13 +135,7 @@ export function createProgressState(
             }
           },
           clear: async () => {
-            for (const lane of draftLanes) {
-              // Accepted blocks and pagination pages have physical custody independent
-              // of whether this turn's final answer succeeded.
-              if (!lane.finalized) {
-                await lane.stream?.clear();
-              }
-            }
+            await clearDraftLanesAtTeardown(getTurn(), draftLanes);
           },
         }
       : undefined,
