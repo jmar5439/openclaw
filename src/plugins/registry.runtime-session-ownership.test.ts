@@ -173,6 +173,11 @@ describe("plugin registry runtime session ownership", () => {
     const subagent = {
       complete: vi.fn(async () => ({ text: "completed" })),
       run: vi.fn(async () => ({ runId: "subagent-run" })),
+      spawnAcp: vi.fn(async () => ({
+        status: "error" as const,
+        errorCode: "acp_disabled",
+        error: "disabled",
+      })),
       waitForRun: vi.fn(async () => ({ status: "ok" as const })),
       getSessionMessages: vi.fn(async () => ({ messages: [] })),
       deleteSession: vi.fn(async () => {}),

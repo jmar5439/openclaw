@@ -5,6 +5,11 @@ import { assertOperatorModelAllowed } from "../agents/admitted-run-context.js";
 import { splitTrailingAuthProfile } from "../agents/model-ref-profile.js";
 import type { ModelRef } from "../agents/model-ref-shared.js";
 import type { AgentWaitResult } from "../agents/run-wait.types.js";
+import { withParentExecutionIdentity } from "../agents/subagents/spawn/execution-identity-spawn-context.js";
+import {
+  captureGatewayToolCallerAssertion,
+  getGatewayToolCallerIdentity,
+} from "../agents/tools/gateway-caller-context.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { normalizePluginsConfig } from "../plugins/config-state.js";
 import { compileModelAllowlist, type CompiledModelAllowlist } from "../plugins/model-allowlist.js";
@@ -202,6 +207,43 @@ export function createGatewaySubagentRuntime(
   };
 
   const subagentRuntime: PluginRuntime["subagent"] = {
+    async spawnAcp(request) {
+      const scope = getPluginRuntimeGatewayRequestScope();
+      const pluginId = scope?.pluginId?.trim();
+      const caller = getGatewayToolCallerIdentity();
+      if (!pluginId || !caller?.sessionKey || !caller.agentId) {
+        throw new Error("ACP plugin spawning requires an active Gateway agent-turn context.");
+      }
+      const assertCurrent = captureGatewayToolCallerAssertion();
+      const spawnContext = {
+        agentSessionKey: caller.sessionKey,
+        requesterAgentIdOverride: caller.agentId,
+        agentChannel: caller.turnSourceChannel,
+        agentTo: caller.turnSourceTo,
+        agentAccountId: caller.turnSourceAccountId,
+        agentThreadId: caller.turnSourceThreadId,
+        assertActive: () => {
+          scope.signal?.throwIfAborted();
+          assertCurrent?.("agent");
+        },
+      };
+      const { spawnAcpDirect } = await import("../agents/subagents/spawn/acp-spawn.js");
+      const params = {
+        task: request.task,
+        ...(request.agentId !== undefined && { agentId: request.agentId }),
+        ...(request.cwd !== undefined && { cwd: request.cwd }),
+        ...(request.mode !== undefined && { mode: request.mode }),
+        ...(request.thread !== undefined && { thread: request.thread }),
+        ...(request.sandbox !== undefined && { sandbox: request.sandbox }),
+        ...(request.runTimeoutSeconds !== undefined && {
+          runTimeoutSeconds: request.runTimeoutSeconds,
+        }),
+      };
+      return await spawnAcpDirect(
+        params,
+        withParentExecutionIdentity(spawnContext, caller.executionIdentityToken),
+      );
+    },
     async complete(request) {
       // Authorization and credential selection must use the same request across queue waits.
       const params = { ...request };
