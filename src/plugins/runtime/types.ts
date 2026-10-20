@@ -67,6 +67,36 @@ type SubagentWaitParams = {
   timeoutMs?: number;
 };
 
+export type PluginSubagentSpawnAcpResult =
+  | {
+      status: "accepted";
+      childSessionKey: string;
+      runId: string;
+      mode: "run" | "session";
+      note?: string;
+      runTimeoutSeconds?: number;
+      expectsCompletionMessage?: boolean;
+      inlineDelivery?: boolean;
+    }
+  | {
+      status: "forbidden" | "error";
+      error: string;
+      errorCode: string;
+      childSessionKey?: string;
+      runId?: string;
+      mode?: "run" | "session";
+    };
+
+type SubagentSpawnAcpParams = {
+  task: string;
+  agentId?: string;
+  cwd?: string;
+  mode?: "run" | "session";
+  thread?: boolean;
+  sandbox?: "inherit" | "require";
+  runTimeoutSeconds?: number;
+};
+
 type SubagentGetSessionMessagesParams = {
   sessionKey: string;
   limit?: number;
@@ -148,6 +178,8 @@ export type PluginRuntime = PluginRuntimeCore & {
     /** Fresh, tool-free background inference under the existing subagent model policy. */
     complete: (params: SubagentCompleteParams) => Promise<{ text: string }>;
     run: (params: SubagentRunParams) => Promise<SubagentRunResult>;
+    /** Start an ACP child through the Gateway-owned spawn lifecycle. */
+    spawnAcp: (params: SubagentSpawnAcpParams) => Promise<PluginSubagentSpawnAcpResult>;
     waitForRun: (params: SubagentWaitParams) => Promise<AgentWaitResult>;
     getSessionMessages: (
       params: SubagentGetSessionMessagesParams,

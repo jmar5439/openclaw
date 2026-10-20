@@ -91,6 +91,7 @@ it.each([
       subagent: {
         complete: vi.fn<PluginRuntime["subagent"]["complete"]>(),
         run: vi.fn<PluginRuntime["subagent"]["run"]>(),
+        spawnAcp: vi.fn<PluginRuntime["subagent"]["spawnAcp"]>(),
         waitForRun: vi.fn<PluginRuntime["subagent"]["waitForRun"]>(),
         getSessionMessages: async () => ({ messages: [owner] }),
         deleteSession: vi.fn<PluginRuntime["subagent"]["deleteSession"]>(),
