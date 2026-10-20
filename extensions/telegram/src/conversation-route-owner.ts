@@ -88,7 +88,7 @@ export function inspectTelegramConversationRouteOwner(params: {
     return { kind: "unavailable" as const };
   }
   if (result.bindingMode.kind !== "plugin-owned-runtime") {
-    return { kind: "agent" as const, agentId: result.route.agentId };
+    return { kind: "agent" as const, agentId: result.route.ownerAgentId ?? result.route.agentId };
   }
   return result.bindingMode.pluginId
     ? {

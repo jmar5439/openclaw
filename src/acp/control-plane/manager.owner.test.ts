@@ -198,6 +198,72 @@ it("keeps legacy runtime implementations assignable and rejects unisolated bare 
   });
 });
 
+it("passes the harness owner to the runtime backend for free ACP keys with an admitted owner", async () => {
+  const { ensureManagerRuntimeHandle } = await import("./manager.runtime-handle-ensure.js");
+  const { ManagerRuntimeHandleCache } = await import("./manager.runtime-handle-cache.js");
+  const cfg = {
+    agents: { ownership: "explicit" as const, entries: { codex: {} } },
+  } satisfies OpenClawConfig;
+  const ensureSession = vi.fn(async (input: { sessionKey: string; agentId?: string }) => ({
+    sessionKey: input.sessionKey,
+    backend: "synthetic",
+    runtimeSessionName: `${input.agentId}/${input.sessionKey}`,
+  }));
+  const runtime = {
+    ownerAwareSessions: 1 as const,
+    ensureSession,
+    async *runTurn() {
+      yield { type: "done" as const };
+    },
+    async prepareFreshSession() {},
+    async cancel() {},
+    async close() {},
+  } satisfies AcpRuntime;
+  const meta = {
+    backend: "synthetic",
+    agent: "fixture",
+    runtimeSessionName: "synthetic/fixture",
+    mode: "persistent" as const,
+    state: "idle" as const,
+    lastActivityAt: 1,
+  };
+  const ensured = await ensureManagerRuntimeHandle({
+    cfg,
+    sessionKey: "agent:opencode:acp:fixture",
+    agentId: "codex",
+    meta,
+    deps: {
+      requireRuntimeBackend: () => ({ id: "synthetic", runtime }),
+      loadSessionEntryAsync: async () => null,
+    },
+    runtimeHandles: new ManagerRuntimeHandleCache(),
+    writeSessionMeta: async () => null,
+  });
+  expect(ensureSession).toHaveBeenCalledOnce();
+  // The backend owner gate compares against the key-encoded owner.
+  expect(ensureSession.mock.calls[0]?.[0]).toMatchObject({ agentId: "opencode" });
+  // Every later backend call (turn, model, status, close) revalidates the handle.
+  expect(ensured.handle).toMatchObject({ agentId: "opencode" });
+});
+
+it("persists harness-owned runtime handles for free ACP keys with an admitted owner", async () => {
+  const { persistedAcpRuntimeHandle } = await import("./manager.runtime-owner.js");
+  const meta = {
+    backend: "synthetic",
+    agent: "fixture",
+    runtimeSessionName: "synthetic/fixture",
+    mode: "persistent" as const,
+    state: "idle" as const,
+    lastActivityAt: 1,
+  };
+  expect(
+    persistedAcpRuntimeHandle({ sessionKey: "agent:opencode:acp:fixture", agentId: "codex" }, meta),
+  ).toMatchObject({ agentId: "opencode" });
+  expect(
+    persistedAcpRuntimeHandle({ sessionKey: "agent:main:main", agentId: "main" }, meta),
+  ).toMatchObject({ agentId: "main" });
+});
+
 it("retains canonical metadata when an unmigrated backend locator blocks status or reset", async () => {
   await withManagerTestDir("acp-owner-repair-", async (dir) => {
     const cfg = {

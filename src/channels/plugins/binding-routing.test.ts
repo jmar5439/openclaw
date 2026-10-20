@@ -357,6 +357,21 @@ describe("runtime conversation binding route", () => {
       }),
     ).toThrow();
   });
+
+  it("keeps the configured route agent as owner for free ACP harness bindings", () => {
+    const result = inspectRuntimeConversationBindingRoute({
+      route: createRoute(),
+      inspection: {
+        status: "available",
+        binding: createBinding({
+          targetSessionKey: "agent:claude:acp:11111111-2222-4333-8555-666666666666",
+        }),
+      },
+    });
+
+    expect(result.route.sessionKey).toBe("agent:claude:acp:11111111-2222-4333-8555-666666666666");
+    expect(result.route).toMatchObject({ ownerAgentId: "main" });
+  });
 });
 
 describe("ensureConfiguredBindingRouteReady", () => {

@@ -92,6 +92,7 @@ export async function upsertAcpSessionMetaNative(params: {
   }
   const { entry, storePath } = storeEntry;
   const storageSessionKey = storeEntry.storeSessionKey;
+  const storeOwnerId = storeEntry.storeAgentId ?? storeEntry.agentId;
   let current: SessionAcpMeta | undefined;
   let currentRowKey: string | undefined;
   let nextMeta: SessionAcpMeta | null | undefined;
@@ -101,7 +102,7 @@ export async function upsertAcpSessionMetaNative(params: {
     (database) => {
       params.assertCommitAllowed?.();
       const fresh = readLegacyAcpMigrationContext({
-        agentId: storeEntry.agentId,
+        agentId: storeOwnerId,
         storePath,
         sessionKey: storageSessionKey,
         env: params.env,
@@ -115,7 +116,7 @@ export async function upsertAcpSessionMetaNative(params: {
       const currentRow = selectAcpSessionRowForStoreEntry(
         database.db,
         storageSessionKey,
-        storeEntry.agentId,
+        storeOwnerId,
         storeEntry.cfg,
         entry,
       );
@@ -142,7 +143,7 @@ export async function upsertAcpSessionMetaNative(params: {
         params.assertCommitAllowed?.();
         consumeLegacyAcpMigrationSources({
           database: database.db,
-          agentId: storeEntry.agentId,
+          agentId: storeOwnerId,
           storePath,
           sessionKey: publishedSessionKey,
           entry: publishedEntry,
@@ -151,7 +152,7 @@ export async function upsertAcpSessionMetaNative(params: {
           now: updatedAt,
         });
         applyAcpSessionMutation(database.db, {
-          agentId: storeEntry.agentId,
+          agentId: storeOwnerId,
           storageSessionKey,
           sessionKey: publishedSessionKey,
           entry: publishedEntry,
@@ -159,7 +160,7 @@ export async function upsertAcpSessionMetaNative(params: {
           decision,
         });
         sessionChanges.emit(
-          { agentId: storeEntry.agentId, sessionKey: publishedSessionKey },
+          { agentId: storeOwnerId, sessionKey: publishedSessionKey },
           database.db,
         );
       },
@@ -174,7 +175,7 @@ export async function upsertAcpSessionMetaNative(params: {
     const patched = entry
       ? await patchSessionEntryWithKey(
           {
-            ...(storeEntry.agentId ? { agentId: storeEntry.agentId } : {}),
+            ...(storeOwnerId ? { agentId: storeOwnerId } : {}),
             storePath: storeEntry.storePath,
             sessionKey: storageSessionKey,
           },
@@ -198,7 +199,7 @@ export async function upsertAcpSessionMetaNative(params: {
       : null;
     publish(patched?.sessionKey ?? storageSessionKey, patched?.entry ?? entry, { kind: "clear" });
     await clearLegacyEmbeddedAcpMetadata({
-      agentId: storeEntry.agentId,
+      agentId: storeOwnerId,
       storePath: storeEntry.storePath,
       sessionKeys: [storageSessionKey, patched?.sessionKey],
       expectedEntry: patched?.entry ?? entry ?? null,
@@ -209,7 +210,7 @@ export async function upsertAcpSessionMetaNative(params: {
   }
   const persisted = await patchSessionEntryWithKey(
     {
-      ...(storeEntry.agentId ? { agentId: storeEntry.agentId } : {}),
+      ...(storeOwnerId ? { agentId: storeOwnerId } : {}),
       storePath: storeEntry.storePath,
       sessionKey: storageSessionKey,
     },
@@ -237,7 +238,7 @@ export async function upsertAcpSessionMetaNative(params: {
     return null;
   }
   await clearLegacyEmbeddedAcpMetadata({
-    agentId: storeEntry.agentId,
+    agentId: storeOwnerId,
     storePath: storeEntry.storePath,
     sessionKeys: [storageSessionKey, persisted.sessionKey],
     expectedEntry: persisted.entry,

@@ -16,6 +16,7 @@ import type {
   SessionAcpMeta,
   WriteManagerSessionMeta,
 } from "./manager.types.js";
+import { resolveAcpRuntimeAgentId } from "./manager.utils.js";
 
 export function isRecoverableManagerAcpxExitError(message: string): boolean {
   return /^acpx exited with (code \d+|signal [a-z0-9]+)/i.test(message.trim());
@@ -84,7 +85,7 @@ export async function prepareFreshManagerRuntimeHandleRetry(params: {
       await params.runtime.prepareFreshSession({
         persistedHandle: persistedAcpRuntimeHandle(params, params.meta),
         sessionKey: params.sessionKey,
-        agentId: params.agentId,
+        agentId: resolveAcpRuntimeAgentId(params.sessionKey, params.agentId),
       });
       if (!params.isCurrentActor()) {
         return false;

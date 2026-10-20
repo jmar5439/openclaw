@@ -71,14 +71,17 @@ export async function withAcpSessionEntryRead<T>(
       { kind: "native", assertCurrent },
     );
   }
+  // Physical reads key by store owner; the resolved config owner rides
+  // alongside in target.agentId for downstream config use (#146365).
+  const storeAgentId = target.storeAgentId ?? target.agentId;
   return await withSessionEntryReadOnlyInWorker(
-    { agentId: target.agentId, storePath: target.storePath, sessionKey: storeSessionKey, env },
+    { agentId: storeAgentId, storePath: target.storePath, sessionKey: storeSessionKey, env },
     assertCurrent,
     async (read, owner) => {
       const entry = read.ok ? read.value : undefined;
       const [acp] = await readAcpSessionMetaForEntries(
         {
-          entries: [{ sessionKey: storeSessionKey, agentId: target.agentId, entry }],
+          entries: [{ sessionKey: storeSessionKey, agentId: storeAgentId, entry }],
           cfg,
           env,
           databasePath,

@@ -135,6 +135,20 @@ export function readConversationBindingRouteFacts(
   return value[BINDING_ROUTE_FACTS];
 }
 
+export function resolveConversationBindingRouteOwnerAgentId(
+  value: Carrier,
+  sessionKey: string | undefined,
+): string | undefined {
+  if (!sessionKey) {
+    return undefined;
+  }
+  const facts = readConversationBindingRouteFacts(value);
+  if (facts?.kind !== "agent" || facts.targetSessionKey !== sessionKey) {
+    return undefined;
+  }
+  return facts.fallbackAgentId;
+}
+
 export function copyConversationBindingRouteFacts(
   route: Carrier,
   context: { SessionKey?: string; AgentId?: string },

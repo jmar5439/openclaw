@@ -1,10 +1,11 @@
 import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/string-coerce";
+import { listAgentIds } from "../agents/agent-roster.js";
 import { normalizeChatType, type ChatType } from "../channels/chat-type.js";
 import { listRouteBindings } from "../config/bindings.js";
 import type { AgentRouteBinding } from "../config/types.agents.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { normalizeRouteBindingId, normalizeRouteBindingRoles } from "./binding-scope.js";
-import { normalizeAccountId } from "./session-key.js";
+import { normalizeAccountId, normalizeAgentId } from "./session-key.js";
 
 export type NormalizedPeerConstraint =
   | { state: "none" }
@@ -249,6 +250,36 @@ function normalizePeerConstraint(
     return { state: "wildcard-kind", kind };
   }
   return { state: "valid", kind, id };
+}
+
+/**
+ * Configured agent for a channel account, for ownerless resolutions (#146365).
+ * Returns the first source-order route binding match whose agent is configured,
+ * or undefined when the channel/account has no usable binding. Used as a last
+ * fallback only; explicit owners and binding owners always win.
+ */
+export function resolveChannelRouteAgentId(
+  cfg: OpenClawConfig,
+  channel?: string,
+  accountId?: string,
+): string | undefined {
+  const normalizedChannel = normalizeLowercaseStringOrEmpty(channel);
+  if (!normalizedChannel) {
+    return undefined;
+  }
+  const { bindings } = getEvaluatedBindingsForChannelAccount(
+    cfg,
+    normalizedChannel,
+    normalizeAccountId(accountId ?? ""),
+  );
+  const configured = new Set(listAgentIds(cfg));
+  for (const { binding } of bindings) {
+    const agentId = normalizeAgentId(binding.agentId);
+    if (agentId && configured.has(agentId)) {
+      return agentId;
+    }
+  }
+  return undefined;
 }
 
 export function normalizeBindingMatch(

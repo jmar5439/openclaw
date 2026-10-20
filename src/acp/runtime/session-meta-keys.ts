@@ -3,6 +3,7 @@ import { normalizeLowercaseStringOrEmpty } from "@openclaw/normalization-core/st
 import type { Insertable } from "kysely";
 import { tryResolveLegacyDataOwnerAgentId } from "../../agents/agent-scope-config.js";
 import { resolvePersistedSessionStoreOwnerForKey } from "../../config/sessions/session-store-owner.js";
+import { normalizeStoreSessionKey } from "../../config/sessions/store-entry.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   executeSqliteQuerySync,
@@ -164,6 +165,29 @@ export function resolveLegacyFreeAcpSessionKey(sessionKey: string): string | und
     : undefined;
 }
 
+/**
+ * Read keys for ACP metadata, explicit key first. Free ACP harness rows are
+ * keyed by harness id while callers increasingly resolve a configured owner
+ * (#146365). The harness key is tried as fallback so owner-scoped reads keep
+ * finding existing metadata. Non-harness keys resolve to the single key.
+ */
+export function buildAcpDatabaseSessionReadKeys(
+  storeSessionKey: string,
+  agentId?: string,
+): string[] {
+  const key = normalizeStoreSessionKey(storeSessionKey);
+  const parsed = parseAgentSessionKey(key);
+  const keys = [buildAcpDatabaseSessionKey(key, agentId ?? parsed?.agentId)];
+  const rest = parsed?.rest?.toLowerCase() ?? "";
+  if (parsed?.agentId && rest.startsWith("acp:") && !rest.startsWith("acp:binding:")) {
+    const harnessKey = buildAcpDatabaseSessionKey(key, parsed.agentId);
+    if (!keys.includes(harnessKey)) {
+      keys.push(harnessKey);
+    }
+  }
+  return keys;
+}
+
 export function selectLegacyFreeAcpSessionRows(
   database: DatabaseSync,
   sessionKeys: readonly string[],
@@ -201,6 +225,28 @@ export function selectLegacyFreeAcpSessionRows(
   return rowsByKey;
 }
 
+/**
+ * Harness fallback key for free ACP sessions (#146365). Rows are keyed by
+ * harness id while callers increasingly resolve a configured owner; trying
+ * the harness key keeps owner-scoped reads finding existing metadata.
+ */
+export function buildAcpDatabaseSessionHarnessFallbackKey(
+  storeSessionKey: string,
+  agentId?: string,
+): string | undefined {
+  const parsed = parseAgentSessionKey(normalizeLowercaseStringOrEmpty(storeSessionKey));
+  const rest = parsed?.rest ?? "";
+  if (
+    !parsed?.agentId ||
+    !rest.startsWith("acp:") ||
+    rest.startsWith("acp:binding:") ||
+    normalizeAgentId(agentId ?? "") === normalizeAgentId(parsed.agentId)
+  ) {
+    return undefined;
+  }
+  return buildAcpDatabaseSessionKey(storeSessionKey, parsed.agentId);
+}
+
 export function selectAcpSessionRowForStoreEntry(
   db: DatabaseSync,
   storeSessionKey: string,
@@ -209,10 +255,7 @@ export function selectAcpSessionRowForStoreEntry(
   entry?: AcpSessionEntryBinding,
 ): AcpSessionRow | undefined {
   return selectAcpSessionRowForRead(db, {
-    keys: [
-      buildAcpDatabaseSessionKey(storeSessionKey, agentId),
-      ...legacyAcpDatabaseSessionKeys(storeSessionKey, agentId, cfg),
-    ],
+    keys: buildAcpDatabaseSessionReadKeys(storeSessionKey, agentId),
     legacyKey: resolveLegacyFreeAcpSessionKey(storeSessionKey),
     entry,
   });
