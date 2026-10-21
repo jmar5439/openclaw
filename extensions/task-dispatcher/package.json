@@ -1,0 +1,12 @@
+{
+  "name": "@openclaw/task-dispatcher",
+  "version": "2026.9.8",
+  "private": true,
+  "description": "OpenClaw agent task dispatcher plugin",
+  "type": "module",
+  "dependencies": { "typebox": "1.3.34" },
+  "devDependencies": { "@openclaw/plugin-sdk": "workspace:*" },
+  "peerDependencies": { "openclaw": ">=2026.9.8" },
+  "peerDependenciesMeta": { "openclaw": { "optional": true } },
+  "openclaw": { "extensions": ["./index.ts"] }
+}

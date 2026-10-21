@@ -1,0 +1,11 @@
+{
+  "id": "task-dispatcher",
+  "categories": ["agent-orchestration"],
+  "enabledByDefault": false,
+  "activation": { "onStartup": true },
+  "name": "Task Dispatcher",
+  "description": "Routes tasks to configured native OpenClaw agents using their declared metadata.",
+  "contracts": { "tools": ["task_dispatch"] },
+  "toolMetadata": { "task_dispatch": { "optional": true } },
+  "configSchema": { "type": "object", "additionalProperties": false, "properties": {} }
+}

@@ -1,0 +1,4 @@
+{
+  "extends": "../tsconfig.package-boundary.base.json",
+  "include": ["./*.ts", "./src/**/*.ts"]
+}
